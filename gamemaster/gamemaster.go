@@ -6,12 +6,12 @@ import (
 	"risk/game"
 )
 
-// managing the game flow and resolving actions.
+// GameMaster manages the game flow and resolves actions.
 type GameMaster struct {
 	Communicator communication.Communicator
 }
 
-// NewGameMaster
+// NewGameMaster initializes a new GameMaster.
 func NewGameMaster(comm communication.Communicator) *GameMaster {
 	return &GameMaster{
 		Communicator: comm,

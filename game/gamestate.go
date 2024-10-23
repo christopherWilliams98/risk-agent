@@ -2,6 +2,8 @@ package game
 
 import (
 	"fmt"
+	"math/rand"
+	"sort"
 )
 
 // GameState represents the dynamic state of the game at any point. stuff that will change during the game, (everything except the map - which is static), and at some point even the rules.
@@ -9,15 +11,17 @@ type GameState struct {
 	Map         *Map  // Reference to the static game map
 	TroopCounts []int // Troop counts per canton, indexed by canton ID
 	Ownership   []int // Owner IDs per canton, indexed by canton ID (-1 indicates unowned)
+	Rules       Rules // The set of game rules to apply
 }
 
 // NewGameState initializes and returns a new GameState.
-func NewGameState(m *Map) *GameState {
+func NewGameState(m *Map, rules Rules) *GameState {
 	numCantons := len(m.Cantons)
 	gs := &GameState{
 		Map:         m,
 		TroopCounts: make([]int, numCantons),
 		Ownership:   make([]int, numCantons),
+		Rules:       rules,
 	}
 	// Initialize all cantons as unowned (-1)
 	for i := range gs.Ownership {
@@ -63,9 +67,8 @@ func (gs *GameState) MoveTroops(fromCantonID, toCantonID, numTroops int) error {
 	return nil
 }
 
-// Attack initiates an attack from one canton to another.
 func (gs *GameState) Attack(attackerID, defenderID, numTroops int) error {
-	// Check different ownership
+	// Check ownership
 	if gs.Ownership[attackerID] == gs.Ownership[defenderID] {
 		return fmt.Errorf("cannot attack: target canton is owned by the same player")
 	}
@@ -77,21 +80,62 @@ func (gs *GameState) Attack(attackerID, defenderID, numTroops int) error {
 	if gs.TroopCounts[attackerID] <= numTroops {
 		return fmt.Errorf("cannot attack: not enough troops to attack")
 	}
+	// Limit the number of troops based on the rules
+	maxAttackTroops := gs.Rules.MaxAttackTroops()
+	if numTroops > maxAttackTroops {
+		numTroops = maxAttackTroops
+	}
 
-	// Placeholder TODO implement with dynamic rules and constraints.
+	// Roll dice for attacker and defender
+	attackerDice := min(numTroops, gs.Rules.MaxAttackTroops())
+	defenderDice := min(gs.TroopCounts[defenderID], gs.Rules.MaxDefendTroops())
 
-	// attackerLosses := numTroops / 2
-	// defenderLosses := numTroops / 2
+	attackerRolls := rollDice(attackerDice)
+	defenderRolls := rollDice(defenderDice)
 
-	// gs.TroopCounts[attackerID] -= attackerLosses
-	// gs.TroopCounts[defenderID] -= defenderLosses
+	// Sort dice rolls in descending order
+	sort.Sort(sort.Reverse(sort.IntSlice(attackerRolls)))
+	sort.Sort(sort.Reverse(sort.IntSlice(defenderRolls)))
 
-	// if gs.TroopCounts[defenderID] <= 0 {
-	// 	gs.Ownership[defenderID] = gs.Ownership[attackerID]
-	// 	gs.TroopCounts[defenderID] = numTroops - attackerLosses
-	// }
+	// Determine the outcome using the rules
+	attackerLosses, defenderLosses := gs.Rules.DetermineAttackOutcome(attackerRolls, defenderRolls)
+
+	// Apply losses
+	gs.TroopCounts[attackerID] -= attackerLosses
+	gs.TroopCounts[defenderID] -= defenderLosses
+
+	// If defender has no troops left, attacker captures the canton
+	if gs.TroopCounts[defenderID] <= 0 {
+		gs.Ownership[defenderID] = gs.Ownership[attackerID]
+		// Move at least one troop into the captured canton
+		troopsToMove := numTroops - attackerLosses
+		if troopsToMove < 1 {
+			troopsToMove = 1
+		}
+		if troopsToMove > gs.TroopCounts[attackerID] {
+			troopsToMove = gs.TroopCounts[attackerID]
+		}
+		gs.TroopCounts[attackerID] -= troopsToMove
+		gs.TroopCounts[defenderID] = troopsToMove
+	}
 
 	return nil
+}
+
+func rollDice(num int) []int {
+	rolls := make([]int, num)
+	for i := 0; i < num; i++ {
+		rolls[i] = rand.Intn(6) + 1
+	}
+	sort.Sort(sort.Reverse(sort.IntSlice(rolls)))
+	return rolls
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // AreAdjacent checks if two cantons are adjacent on the map.

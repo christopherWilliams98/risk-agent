@@ -57,7 +57,7 @@ func (p *Player) TakeTurn() communication.Action {
 	return chosenAction
 }
 
-// TODO conform more to the rules of 2 player risk, there are way more actions I need to implement. Just starting simple.
+// TODO implement the changes with rules.
 // generatePossibleActions generates all possible actions for the player.
 func (p *Player) generatePossibleActions() []communication.Action {
 	var actions []communication.Action
