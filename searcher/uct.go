@@ -71,13 +71,13 @@ func (u *uct) playout(root Node, state game.State) { // TODO: remove arguments??
 	}
 
 	// Simulation
-	moves := nextState.GetMoves()
+	moves := nextState.LegalMoves()
 	for len(moves) > 0 {
 		// Follow a random simulation policy
 		move := moves[rand.Intn(len(moves))]
 		state = nextState
 		nextState = state.Play(move)
-		moves = nextState.GetMoves()
+		moves = nextState.LegalMoves()
 	}
 	// Last player to move wins the game
 	winner := state.Player()

@@ -19,7 +19,7 @@ type decision struct {
 
 func newDecision(parent Node, state game.State) *decision {
 	// TODO: randomize moves
-	moves := state.GetMoves()
+	moves := state.LegalMoves()
 
 	var delta map[string]any
 	if _, ok := parent.(*chance); ok {
