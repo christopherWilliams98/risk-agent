@@ -7,15 +7,15 @@ import (
 
 const C_SQUARED = 2.0
 
-const WIN = 1
-const LOSS = 0
+const WIN = 1.0
+const LOSS = 0.0
 
 type Node interface {
-	SelectOrExpand(state game.State) (child Node, childState game.State, isAdded bool)
-	ApplyLoss()
-	Score(normalizer float64) float64
+	PickChild(state game.State) (child Node, childState game.State, added bool)
 	Update(reward func(string) float64) Node
-	Visits() int
+	Value() int
+	applyLoss()
+	score(normalizer float64) float64
 }
 
 type MCTS interface {

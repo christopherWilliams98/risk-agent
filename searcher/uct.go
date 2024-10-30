@@ -15,17 +15,18 @@ type uct struct {
 func (u *uct) FindNextMove(state game.State) game.Move {
 	// TODO: find or create a node for state
 	root := newDecision(nil, state)
+	// TODO: either iterate() or countdown() based on options argument
 
 	return root.findBestMove()
 }
 
-func (u *uct) searchByIterations(goroutines int, iterations int) {
+func (u *uct) iterate(goroutines int, iterations int) {
 	progress := make(chan any, iterations)
 	done := make(chan any)
 
 	worker := func() {
 		for {
-			u.playout(u.root, u.state)
+			simulate(u.root, u.state)
 			select {
 			case progress <- nil:
 			case <-done:
@@ -47,11 +48,12 @@ func (u *uct) searchByIterations(goroutines int, iterations int) {
 	}
 }
 
-func (u *uct) searchByDuration(goroutines int, duration time.Duration) {
+func (u *uct) countdown(goroutines int, duration time.Duration) {
 	start := time.Now()
+
 	worker := func() {
 		for time.Since(start) < duration {
-			u.playout(u.root, u.state)
+			simulate(u.root, u.state)
 		}
 	}
 
@@ -60,20 +62,22 @@ func (u *uct) searchByDuration(goroutines int, duration time.Duration) {
 	}
 }
 
-func (u *uct) playout(root Node, state game.State) { // TODO: remove arguments??
+func simulate(root Node, state game.State) { // TODO: remove arguments??
 	// Selection and expansion
 	var parent Node = root
-	child, nextState, isAdded := parent.SelectOrExpand(state)
+	child, nextState, isAdded := parent.PickChild(state)
 	for child != parent && !isAdded {
 		parent = child
 		state = nextState
-		child, nextState, isAdded = parent.SelectOrExpand(state)
+		child, nextState, isAdded = parent.PickChild(state)
 	}
 
-	// Simulation
+	// Rollout
+	// TODO: limit max depth vs rollout with cutoff
 	moves := nextState.LegalMoves()
 	for len(moves) > 0 {
-		// Follow a random simulation policy
+		// Follow a random rollout policy
+		// TODO: 75% attack, 90% fortify
 		move := moves[rand.Intn(len(moves))]
 		state = nextState
 		nextState = state.Play(move)

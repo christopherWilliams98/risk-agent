@@ -37,7 +37,7 @@ func newDecision(parent Node, state game.State) *decision {
 	}
 }
 
-func (d *decision) SelectOrExpand(state game.State) (Node, game.State, bool) {
+func (d *decision) PickChild(state game.State) (Node, game.State, bool) {
 	d.Lock()
 	defer d.Unlock()
 
@@ -47,7 +47,7 @@ func (d *decision) SelectOrExpand(state game.State) (Node, game.State, bool) {
 
 	if len(d.moves) > len(d.children) { // Expandable node
 		child, state := d.addChild(state)
-		child.ApplyLoss()
+		child.applyLoss()
 		return child, state, true
 	}
 
@@ -55,7 +55,7 @@ func (d *decision) SelectOrExpand(state game.State) (Node, game.State, bool) {
 	ith := d.pickChild()
 	child := d.children[ith]
 	move := d.moves[ith]
-	child.ApplyLoss()
+	child.applyLoss()
 	return child, state.Play(move), false
 }
 
@@ -81,7 +81,7 @@ func (d *decision) pickChild() int {
 	maxIndex := -1
 	maxScore := math.Inf(-1)
 	for i, child := range d.children {
-		score := child.Score(normalizer)
+		score := child.score(normalizer)
 		if score == math.Inf(1) {
 			return i
 		}
@@ -93,7 +93,7 @@ func (d *decision) pickChild() int {
 	return maxIndex
 }
 
-func (d *decision) ApplyLoss() {
+func (d *decision) applyLoss() {
 	d.Lock()
 	defer d.Unlock()
 
@@ -101,7 +101,7 @@ func (d *decision) ApplyLoss() {
 	d.visits++
 }
 
-func (d *decision) Score(normalizer float64) float64 {
+func (d *decision) score(normalizer float64) float64 {
 	d.RLock()
 	defer d.RUnlock()
 
@@ -124,7 +124,7 @@ func (d *decision) Update(rewarder func(string) float64) Node {
 	return d.parent
 }
 
-func (d *decision) Visits() int {
+func (d *decision) Value() int {
 	d.RLock()
 	defer d.RUnlock()
 
@@ -133,10 +133,10 @@ func (d *decision) Visits() int {
 
 func (d *decision) findBestMove() game.Move {
 	bestIndex := -1
-	maxVisits := -1
+	maxValue := -1
 	for i, child := range d.children {
-		if child.Visits() > maxVisits {
-			maxVisits = child.Visits()
+		if child.Value() > maxValue {
+			maxValue = child.Value()
 			bestIndex = i
 		}
 	}

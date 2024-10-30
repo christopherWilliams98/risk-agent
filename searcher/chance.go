@@ -23,19 +23,19 @@ func newChance(parent Node, state game.State) *chance {
 	}
 }
 
-func (c *chance) SelectOrExpand(state game.State) (Node, game.State, bool) {
+func (c *chance) PickChild(state game.State) (Node, game.State, bool) {
 	c.Lock()
 	defer c.Unlock()
 
 	child := c.findChild(state)
 	if child != nil {
-		child.ApplyLoss()
+		child.applyLoss()
 		return child, state, false
 	}
 
 	// Expand the chance node for the new state
 	child = c.addChild(state)
-	child.ApplyLoss()
+	child.applyLoss()
 	return child, state, true
 }
 
@@ -67,7 +67,7 @@ func (c *chance) addChild(state game.State) *decision {
 	return child
 }
 
-func (c *chance) ApplyLoss() {
+func (c *chance) applyLoss() {
 	c.Lock()
 	defer c.Unlock()
 
@@ -75,7 +75,7 @@ func (c *chance) ApplyLoss() {
 	c.visits++
 }
 
-func (c *chance) Score(normalizer float64) float64 {
+func (c *chance) score(normalizer float64) float64 {
 	c.RLock()
 	defer c.RUnlock()
 
@@ -96,7 +96,7 @@ func (c *chance) Update(rewarder func(string) float64) Node {
 	return c.parent
 }
 
-func (c *chance) Visits() int {
+func (c *chance) Value() int {
 	c.RLock()
 	defer c.RUnlock()
 
