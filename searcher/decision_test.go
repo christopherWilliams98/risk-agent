@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TODO: test parallel MCTS with virtual loss
+// TODO: test parallel MCTS with virtual loss on decision ndoes (deterministic moves only)
 /* spec:
 // sequential:
 - selection:
@@ -25,6 +25,14 @@ import (
 - backpropagation:
 	- happy path: new added child, winner, rewarder -> [new added child, root] visits & rewards updated
 // concurrent:
+- selection: 2 goroutines
+  - same results as sequential + loss applied to selected child
+- expansion: 2 goroutines
+  - same results as sequential + loss applied to new child
+- backpropagation: 2 goroutines
+  - same results as sequential + loss reversed (except for root: never applied)
+- selection + backup: 2 goroutines
+	- either selection first or backup first then the other
 */
 
 type MockMove struct {
@@ -57,6 +65,10 @@ func (m MockState) Delta() map[string]any {
 	return nil
 }
 
+func (m MockState) Winner() string {
+	return ""
+}
+
 func TestSelectOrExpand(t *testing.T) {
 	t.Run("fully expanded node", func(t *testing.T) {
 		node := &decision{
@@ -67,16 +79,16 @@ func TestSelectOrExpand(t *testing.T) {
 		}
 		state := MockState{}
 
-		gotChild, gotState, gotAdded := node.PickChild(state)
+		gotChild, gotState, gotAdded := node.SelectOrExpand(state)
 
 		require.Equal(t, node.children[1], gotChild, "Node should select child with max policy value")
 		require.IsType(t, &decision{}, gotChild, "Child should be a decision node")
-		require.Equal(t, 1+LOSS, gotChild.(*decision).rewards, "Child should apply virtual loss")
-		require.Equal(t, 2, gotChild.(*decision).visits, "Child should apply virtual loss")
+		require.Equal(t, 1+LOSS, gotChild.(*decision).rewards, "Child should apply a temporary loss")
+		require.Equal(t, 2, gotChild.(*decision).visits, "Child should apply a temporary loss")
 		require.Equal(t, []game.Move{node.moves[1]}, gotState.(MockState).played, "State should update by the move to the max policy child")
 		require.False(t, gotAdded, "Node should add no child")
-		require.Equal(t, 1.0, node.rewards, "Node should not apply virtual loss")
-		require.Equal(t, 2, node.visits, "Node should not apply virtual loss")
+		require.Equal(t, 1.0, node.rewards, "Node stats should not change")
+		require.Equal(t, 2, node.visits, "Node stats should not change")
 	})
 
 	t.Run("expandable node", func(t *testing.T) {
@@ -87,26 +99,26 @@ func TestSelectOrExpand(t *testing.T) {
 		}
 		state := MockState{moves: []game.Move{MockMove{id: 0}, MockMove{id: 1}}}
 
-		gotChild, gotState, gotAdded := node.PickChild(state)
+		gotChild, gotState, gotAdded := node.SelectOrExpand(state)
 
 		require.IsType(t, &decision{}, gotChild, "Child should be a decision node")
-		require.Equal(t, LOSS, gotChild.(*decision).rewards, "Child should apply virtual loss")
-		require.Equal(t, 1, gotChild.(*decision).visits, "Child should apply virtual loss")
+		require.Equal(t, LOSS, gotChild.(*decision).rewards, "Child should apply a temporary loss")
+		require.Equal(t, 1, gotChild.(*decision).visits, "Child should apply a temporary loss")
 		require.Equal(t, []game.Move{node.moves[1]},
 			gotState.(MockState).played, "State should update by the move to the child")
-		require.True(t, gotAdded, "Node should add the child")
-		require.Equal(t, 2, len(node.children), "Node should expand with the new child")
+		require.True(t, gotAdded, "Node should add a new child")
+		require.Equal(t, 2, len(node.children), "Node should add a new child")
 	})
 
 	t.Run("terminal node", func(t *testing.T) {
 		node := &decision{}
 		state := MockState{}
 
-		child, childState, added := node.PickChild(state)
+		child, childState, added := node.SelectOrExpand(state)
 
-		require.Equal(t, node, child, "The same node should be returned")
-		require.Equal(t, MockState{}, childState, "The same state should be returned")
-		require.False(t, added, "No child should be added")
+		require.Equal(t, node, child, "Should return the same node")
+		require.Equal(t, MockState{}, childState, "Should return the same state")
+		require.False(t, added, "Should not add a child")
 	})
 }
 
@@ -119,10 +131,10 @@ func TestUpdate(t *testing.T) {
 			visits:  0,
 		}
 
-		got := node.Update(rewarder("player1"))
+		got := node.Backup(rewarder("player1"))
 
 		require.Nil(t, got, "Should return no parent")
-		require.Equal(t, WIN, node.rewards, "Should apply win reward")
+		require.Equal(t, WIN, node.rewards, "Should apply a win reward")
 		require.Equal(t, 1, node.visits, "Should add a visit")
 	})
 
@@ -131,15 +143,15 @@ func TestUpdate(t *testing.T) {
 		node := &decision{
 			parent:  parent,
 			player:  "player1",
-			rewards: LOSS, // Virtual loss
+			rewards: LOSS,
 			visits:  1,
 		}
 
-		got := node.Update(rewarder("player1"))
+		got := node.Backup(rewarder("player1"))
 
-		require.Equal(t, parent, got, "Should return parent node")
-		require.Equal(t, WIN, node.rewards, "Should apply win reward")
-		require.Equal(t, 1, node.visits, "Should reverse virtual loss")
+		require.Equal(t, parent, got, "Should return the parent node")
+		require.Equal(t, WIN, node.rewards, "Should apply a win reward")
+		require.Equal(t, 1, node.visits, "Should reverse the temporary loss")
 	})
 
 	t.Run("losing non-root node", func(t *testing.T) {
@@ -147,14 +159,14 @@ func TestUpdate(t *testing.T) {
 		node := &decision{
 			parent:  parent,
 			player:  "player1",
-			rewards: LOSS, // Virtual loss
+			rewards: LOSS,
 			visits:  1,
 		}
 
-		got := node.Update(rewarder("player2"))
+		got := node.Backup(rewarder("player2"))
 
-		require.Equal(t, parent, got, "Should return parent node")
-		require.Equal(t, LOSS, node.rewards, "Should apply loss reward")
-		require.Equal(t, 1, node.visits, "Should reverse virtual loss")
+		require.Equal(t, parent, got, "Should return the parent node")
+		require.Equal(t, LOSS, node.rewards, "Should apply a loss reward")
+		require.Equal(t, 1, node.visits, "Should reverse the temporary loss")
 	})
 }

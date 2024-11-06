@@ -11,11 +11,11 @@ const WIN = 1.0
 const LOSS = 0.0
 
 type Node interface {
-	PickChild(state game.State) (child Node, childState game.State, added bool)
-	Update(reward func(string) float64) Node
+	SelectOrExpand(state game.State) (child Node, childState game.State, added bool)
+	Backup(reward func(string) float64) Node
 	Value() int
-	applyLoss()
-	score(normalizer float64) float64
+	ApplyLoss()
+	Score(normalizer float64) float64
 }
 
 type MCTS interface {

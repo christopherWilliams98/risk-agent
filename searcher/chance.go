@@ -23,19 +23,19 @@ func newChance(parent Node, state game.State) *chance {
 	}
 }
 
-func (c *chance) PickChild(state game.State) (Node, game.State, bool) {
+func (c *chance) SelectOrExpand(state game.State) (Node, game.State, bool) {
 	c.Lock()
 	defer c.Unlock()
 
 	child := c.findChild(state)
 	if child != nil {
-		child.applyLoss()
+		child.ApplyLoss()
 		return child, state, false
 	}
 
 	// Expand the chance node for the new state
 	child = c.addChild(state)
-	child.applyLoss()
+	child.ApplyLoss()
 	return child, state, true
 }
 
@@ -67,7 +67,7 @@ func (c *chance) addChild(state game.State) *decision {
 	return child
 }
 
-func (c *chance) applyLoss() {
+func (c *chance) ApplyLoss() {
 	c.Lock()
 	defer c.Unlock()
 
@@ -75,25 +75,28 @@ func (c *chance) applyLoss() {
 	c.visits++
 }
 
-func (c *chance) score(normalizer float64) float64 {
+func (c *chance) Score(normalizer float64) float64 {
 	c.RLock()
 	defer c.RUnlock()
 
 	return ucb1(c.rewards, c.visits, normalizer)
 }
 
-func (c *chance) Update(rewarder func(string) float64) Node {
+func (c *chance) Backup(rewarder func(string) float64) Node {
 	c.Lock()
 	defer c.Unlock()
 
-	// Reverse virtual loss
-	c.rewards -= LOSS
-	c.visits--
+	c.reverseLoss()
 
 	c.rewards += rewarder(c.player)
 	c.visits++
 
 	return c.parent
+}
+
+func (c *chance) reverseLoss() {
+	c.rewards -= LOSS
+	c.visits--
 }
 
 func (c *chance) Value() int {

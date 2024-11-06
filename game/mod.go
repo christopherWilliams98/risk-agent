@@ -12,4 +12,5 @@ type State interface {
 	// State change from the last move
 	// TODO: type should be easy to compare equality
 	Delta() map[string]any
+	Winner() string
 }

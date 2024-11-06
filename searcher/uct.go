@@ -2,31 +2,72 @@ package searcher
 
 import (
 	"risk/game"
+	"sync"
 	"time"
 
 	"golang.org/x/exp/rand"
 )
 
+type option func(uct *uct)
+
 type uct struct {
-	root  Node
-	state game.State
+	goroutines int
+	iterations int
+	duration   time.Duration
+	root       Node
+}
+
+func WithGoroutines(goroutines int) option {
+	return func(u *uct) {
+		u.goroutines = goroutines
+	}
+}
+
+func WithIterations(iterations int) option {
+	return func(u *uct) {
+		u.iterations = iterations
+	}
+}
+
+func WithDuration(duration time.Duration) option {
+	return func(u *uct) {
+		u.duration = duration
+	}
+}
+
+func NewUCT(options ...option) *uct {
+	u := &uct{}
+	for _, option := range options {
+		option(u)
+	}
+	return u
 }
 
 func (u *uct) FindNextMove(state game.State) game.Move {
 	// TODO: find or create a node for state
-	root := newDecision(nil, state)
-	// TODO: either iterate() or countdown() based on options argument
-
+	root := newDecision(nil, state) // TODO: set (new) root node parent to nil
+	u.buildTree(root, state)
+	u.root = root // TODO: save new root node for next search
 	return root.findBestMove()
 }
 
-func (u *uct) iterate(goroutines int, iterations int) {
-	progress := make(chan any, iterations)
+func (u *uct) buildTree(root Node, state game.State) {
+	if u.iterations > 0 {
+		u.iterate(root, state)
+	} else if u.duration > 0 {
+		u.countdown(root, state)
+	} else {
+		panic("Must specify search iterations or duration")
+	}
+}
+
+func (u *uct) iterate(root Node, state game.State) {
+	progress := make(chan any, u.iterations)
 	done := make(chan any)
 
 	worker := func() {
 		for {
-			simulate(u.root, u.state)
+			simulate(root, state)
 			select {
 			case progress <- nil:
 			case <-done:
@@ -36,60 +77,71 @@ func (u *uct) iterate(goroutines int, iterations int) {
 	}
 
 	driver := func() {
-		for i := 0; i < iterations; i++ {
+		for i := 0; i < u.iterations; i++ {
 			<-progress
 		}
 		close(done)
 	}
 
-	go driver()
-	for i := 0; i < goroutines; i++ {
+	for i := 0; i < u.goroutines; i++ {
 		go worker()
 	}
+
+	driver()
 }
 
-func (u *uct) countdown(goroutines int, duration time.Duration) {
+func (u *uct) countdown(root Node, state game.State) {
 	start := time.Now()
+	var wg sync.WaitGroup
 
 	worker := func() {
-		for time.Since(start) < duration {
-			simulate(u.root, u.state)
+		defer wg.Done()
+		for time.Since(start) < u.duration {
+			simulate(root, state)
 		}
 	}
 
-	for i := 0; i < goroutines; i++ {
+	for i := 0; i < u.goroutines; i++ {
+		wg.Add(1)
 		go worker()
 	}
+
+	wg.Wait()
 }
 
-func simulate(root Node, state game.State) { // TODO: remove arguments??
-	// Selection and expansion
-	var parent Node = root
-	child, nextState, isAdded := parent.PickChild(state)
+func simulate(root Node, state game.State) {
+	newNode, newState := doSelectionExpansion(root, state)
+	winner := doRollout(newState)
+	doBackup(newNode, winner)
+}
+
+func doSelectionExpansion(root Node, state game.State) (Node, game.State) {
+	parent := root
+	child, state, isAdded := parent.SelectOrExpand(state)
 	for child != parent && !isAdded {
 		parent = child
-		state = nextState
-		child, nextState, isAdded = parent.PickChild(state)
+		child, state, isAdded = parent.SelectOrExpand(state)
 	}
+	return child, state
+}
 
-	// Rollout
-	// TODO: limit max depth vs rollout with cutoff
-	moves := nextState.LegalMoves()
+func doRollout(state game.State) string {
+	// TODO: limit max depth vs rollout with cutoff vs value function
+	moves := state.LegalMoves()
 	for len(moves) > 0 {
 		// Follow a random rollout policy
-		// TODO: 75% attack, 90% fortify
+		// TODO: decision type: 75% attack, 90% fortify
 		move := moves[rand.Intn(len(moves))]
-		state = nextState
-		nextState = state.Play(move)
-		moves = nextState.LegalMoves()
+		state = state.Play(move)
+		moves = state.LegalMoves()
 	}
-	// Last player to move wins the game
-	winner := state.Player()
+	return state.Winner()
+}
 
-	// Backpropagation
-	node := child
+func doBackup(newNode Node, winner string) {
+	node := newNode
 	for node != nil {
-		parent := node.Update(rewarder(winner))
+		parent := node.Backup(rewarder(winner))
 		node = parent
 	}
 }

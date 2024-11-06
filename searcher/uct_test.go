@@ -15,12 +15,5 @@ package searcher
 
 // TODO: test parallel mcts
 /* spec:
-- selection: 2 goroutines
-  - same results as sequential + loss applied to selected child
-- expansion: 2 goroutines
-  - same results as sequential + loss applied to new child
-- backpropagation: 2 goroutines
-  - same results as sequential + loss reversed (except for root: never applied)
-- selection + backup: 2 goroutines
-	- either selection first or backup first then the other
-*/
+
+ */

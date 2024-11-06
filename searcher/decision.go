@@ -37,7 +37,7 @@ func newDecision(parent Node, state game.State) *decision {
 	}
 }
 
-func (d *decision) PickChild(state game.State) (Node, game.State, bool) {
+func (d *decision) SelectOrExpand(state game.State) (Node, game.State, bool) {
 	d.Lock()
 	defer d.Unlock()
 
@@ -47,7 +47,7 @@ func (d *decision) PickChild(state game.State) (Node, game.State, bool) {
 
 	if len(d.moves) > len(d.children) { // Expandable node
 		child, state := d.addChild(state)
-		child.applyLoss()
+		child.ApplyLoss()
 		return child, state, true
 	}
 
@@ -55,7 +55,7 @@ func (d *decision) PickChild(state game.State) (Node, game.State, bool) {
 	ith := d.pickChild()
 	child := d.children[ith]
 	move := d.moves[ith]
-	child.applyLoss()
+	child.ApplyLoss()
 	return child, state.Play(move), false
 }
 
@@ -81,7 +81,7 @@ func (d *decision) pickChild() int {
 	maxIndex := -1
 	maxScore := math.Inf(-1)
 	for i, child := range d.children {
-		score := child.score(normalizer)
+		score := child.Score(normalizer)
 		if score == math.Inf(1) {
 			return i
 		}
@@ -93,7 +93,7 @@ func (d *decision) pickChild() int {
 	return maxIndex
 }
 
-func (d *decision) applyLoss() {
+func (d *decision) ApplyLoss() {
 	d.Lock()
 	defer d.Unlock()
 
@@ -101,27 +101,30 @@ func (d *decision) applyLoss() {
 	d.visits++
 }
 
-func (d *decision) score(normalizer float64) float64 {
+func (d *decision) Score(normalizer float64) float64 {
 	d.RLock()
 	defer d.RUnlock()
 
 	return ucb1(d.rewards, d.visits, normalizer)
 }
 
-func (d *decision) Update(rewarder func(string) float64) Node {
+func (d *decision) Backup(rewarder func(string) float64) Node {
 	d.Lock()
 	defer d.Unlock()
 
-	// Reverse virtual loss except for root node
-	if d.parent != nil {
-		d.rewards -= LOSS
-		d.visits--
+	if d.parent != nil { // Non-root node
+		d.reverseLoss()
 	}
 
 	d.rewards += rewarder(d.player)
 	d.visits++
 
 	return d.parent
+}
+
+func (d *decision) reverseLoss() {
+	d.rewards -= LOSS
+	d.visits--
 }
 
 func (d *decision) Value() int {
@@ -132,11 +135,15 @@ func (d *decision) Value() int {
 }
 
 func (d *decision) findBestMove() game.Move {
-	bestIndex := -1
-	maxValue := -1
-	for i, child := range d.children {
-		if child.Value() > maxValue {
-			maxValue = child.Value()
+	if len(d.children) == 0 {
+		panic("node has no children")
+	}
+
+	bestIndex := 0
+	maxValue := d.children[0].Value()
+	for i, child := range d.children[1:] {
+		if v := child.Value(); v > maxValue {
+			maxValue = v
 			bestIndex = i
 		}
 	}
