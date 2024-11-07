@@ -2,37 +2,35 @@ package searcher
 
 import (
 	"risk/game"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
-// TODO: test parallel MCTS with virtual loss on decision ndoes (deterministic moves only)
-/* spec:
-// sequential:
+/**
+Tests parallel MCTS (tree parallelization with virtual loss) on decision nodes (
+deterministic moves only)
+Spec:
+sequential:
 - selection:
-  - happy path: fully expanded node -> unvisited child or max UCB child, child state
-  - otherwise: skip
-  - edge case: terminal node -> same node
-- expansion:
-	- happy path: expandable node -> new added child (for a random move?), child state
+	- happy path: fully expanded node -> unvisited child or max UCB child
++ loss, child state
 	- otherwise: skip
 	- edge case: terminal node -> same node
-- simulation:
+- expansion:
+	- happy path: expandable node -> new added child + loss, child state
+	- otherwise: skip
+	- edge case: terminal node -> same node
+- rollout:
 	- happy path: state -> terminal state, winner
 		- mock State and State.GetMoves() and State.Play()
 	- edge case: terminal state -> same state, winner
-- backpropagation:
-	- happy path: new added child, winner, rewarder -> [new added child, root] visits & rewards updated
-// concurrent:
-- selection: 2 goroutines
-  - same results as sequential + loss applied to selected child
-- expansion: 2 goroutines
-  - same results as sequential + loss applied to new child
-- backpropagation: 2 goroutines
-  - same results as sequential + loss reversed (except for root: never applied)
-- selection + backup: 2 goroutines
-	- either selection first or backup first then the other
+- backup:
+	- happy path: new added child, winner, rewarder -> [new added child,
+root] reverse loss, visits++ & add rewards
+concurrent: 3 race conditions - shared expansion, shared backup,
+shared selection + backup
 */
 
 type MockMove struct {
@@ -150,8 +148,8 @@ func TestUpdate(t *testing.T) {
 		got := node.Backup(rewarder("player1"))
 
 		require.Equal(t, parent, got, "Should return the parent node")
-		require.Equal(t, WIN, node.rewards, "Should apply a win reward")
-		require.Equal(t, 1, node.visits, "Should reverse the temporary loss")
+		require.Equal(t, WIN, node.rewards, "Should reverse virtual loss and add a win")
+		require.Equal(t, 1, node.visits, "Should reverse virtual loss and add a visit")
 	})
 
 	t.Run("losing non-root node", func(t *testing.T) {
@@ -166,7 +164,152 @@ func TestUpdate(t *testing.T) {
 		got := node.Backup(rewarder("player2"))
 
 		require.Equal(t, parent, got, "Should return the parent node")
-		require.Equal(t, LOSS, node.rewards, "Should apply a loss reward")
-		require.Equal(t, 1, node.visits, "Should reverse the temporary loss")
+		require.Equal(t, LOSS, node.rewards, "Should reverse virtual loss and add a loss")
+		require.Equal(t, 1, node.visits, "Should reverse virtual loss and add a visit")
+	})
+}
+
+// TODO: test FindBestMove()
+
+func TestRaceConditions(t *testing.T) {
+	t.Run("concurrent expansion", func(t *testing.T) {
+		// Setup a node with 2 possible moves but no children yet
+		node := &decision{
+			moves:    []game.Move{MockMove{id: 0}, MockMove{id: 1}},
+			children: []Node{},
+			rewards:  0,
+			visits:   0,
+		}
+		baseState := MockState{moves: []game.Move{MockMove{id: 0}, MockMove{id: 1}}}
+
+		// Launch two goroutines to expand simultaneously
+		var wg sync.WaitGroup
+		type result struct {
+			child Node
+			state game.State
+			added bool
+		}
+		var results [2]result
+		var states [2]MockState
+
+		for i := 0; i < 2; i++ {
+			wg.Add(1)
+			i := i
+			go func() {
+				defer wg.Done()
+				// Each goroutine gets its own copy of state
+				state := MockState{moves: baseState.moves}
+				child, childState, added := node.SelectOrExpand(state)
+				results[i] = result{child, childState, added}
+				states[i] = childState.(MockState)
+			}()
+		}
+		wg.Wait()
+
+		// Verify results
+		require.Equal(t, 2, len(node.children), "Node should have two children")
+
+		// Each goroutine should have:
+		// - Received a decision node as child
+		// - Applied virtual loss to that child
+		// - Marked the expansion as successful
+		for i := 0; i < 2; i++ {
+			require.IsType(t, &decision{}, results[i].child,
+				"Child should be a decision node")
+			require.Equal(t, LOSS, results[i].child.(*decision).rewards,
+				"Child should apply a temporary loss")
+			require.Equal(t, 1, results[i].child.(*decision).visits,
+				"Child should apply a temporary loss")
+			require.True(t, results[i].added,
+				"Child should be added")
+			require.Contains(t, node.moves, states[i].played[0],
+				"Node should expand with a legal move")
+		}
+
+		// Both goroutines should have expanded different moves
+		require.NotEqual(t, states[0].played[0], states[1].played[0],
+			"Node should expand with different moves")
+	})
+
+	t.Run("concurrent backup", func(t *testing.T) {
+		// Setup a node with virtual loss
+		parent := &decision{}
+		node := &decision{
+			parent:  parent, // Not root
+			player:  "player1",
+			rewards: LOSS * 2, // Virtual loss applied
+			visits:  2,        // Visit from virtual loss
+		}
+
+		// Launch multiple goroutines to backup simultaneously
+		var wg sync.WaitGroup
+		for i := 0; i < 2; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				got := node.Backup(rewarder("player1"))
+				require.Equal(t, parent, got,
+					"Should return the parent node")
+			}()
+		}
+		wg.Wait()
+
+		// Verify node stats
+		require.Equal(t, WIN*2, node.rewards,
+			"Node should reverse virtual loss and add two wins")
+		require.Equal(t, 2, node.visits,
+			"Node should reverse virtual loss and add two visits")
+	})
+
+	t.Run("concurrent selection and backup", func(t *testing.T) {
+		// Setup a node with a child
+		parent := &decision{}
+		node := &decision{
+			parent:  parent, // Not root
+			player:  "player1",
+			moves:   []game.Move{MockMove{id: 0}},
+			rewards: LOSS, // Virtual loss applied
+			visits:  3,    // Visit from virtual loss
+		}
+		child := &decision{
+			parent:  node,
+			rewards: 0,
+			visits:  1,
+		}
+		node.children = []Node{child}
+		state := MockState{moves: []game.Move{MockMove{id: 0}}}
+
+		// Launch selection and backup simultaneously
+		var wg sync.WaitGroup
+		wg.Add(2)
+
+		// Goroutine 1: Select the child
+		go func() {
+			defer wg.Done()
+			gotChild, _, _ := node.SelectOrExpand(state)
+			require.Equal(t, child, gotChild,
+				"Should select the child node")
+		}()
+
+		// Goroutine 2: Backup through the node
+		go func() {
+			defer wg.Done()
+			got := node.Backup(rewarder("player1"))
+			require.Equal(t, parent, got,
+				"Should return the parent node")
+		}()
+
+		wg.Wait()
+
+		// Verify final state reflects selection
+		require.Equal(t, LOSS, child.rewards,
+			"Child should apply a temporary loss")
+		require.Equal(t, 2, child.visits,
+			"Child should apply a temporary loss")
+		// Verify final state reflects backup
+		require.Equal(t, WIN, node.rewards,
+			"Node should reverse virtual loss and add a win")
+		require.Equal(t, 3, node.visits,
+			"Node should reverse virtual loss and add a visit")
 	})
 }

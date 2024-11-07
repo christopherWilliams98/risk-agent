@@ -145,10 +145,10 @@ func simulate(root Node, state game.State) {
 
 func doSelectionExpansion(root Node, state game.State) (Node, game.State) {
 	parent := root
-	child, state, isAdded := parent.SelectOrExpand(state)
-	for child != parent && !isAdded {
+	child, state, added := parent.SelectOrExpand(state)
+	for child != parent && !added {
 		parent = child
-		child, state, isAdded = parent.SelectOrExpand(state)
+		child, state, added = parent.SelectOrExpand(state)
 	}
 	return child, state
 }
