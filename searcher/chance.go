@@ -1,6 +1,7 @@
 package searcher
 
 import (
+	"reflect"
 	"risk/game"
 	"sync"
 )
@@ -40,21 +41,10 @@ func (c *chance) SelectOrExpand(state game.State) (Node, game.State, bool) {
 }
 
 func (c *chance) findChild(state game.State) *decision {
-	equals := func(a, b map[string]any) bool {
-		if len(a) != len(b) {
-			return false
-		}
-		for k, v := range a {
-			if b[k] != v {
-				return false
-			}
-		}
-		return true
-	}
-
 	expected := state.Delta()
 	for _, child := range c.children {
-		if equals(child.delta, expected) {
+		// TODO: custom/more efficient comparison??
+		if reflect.DeepEqual(child.delta, expected) {
 			return child
 		}
 	}

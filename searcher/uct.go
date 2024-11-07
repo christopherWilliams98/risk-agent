@@ -2,6 +2,7 @@ package searcher
 
 import (
 	"risk/game"
+	"risk/utils"
 	"sync"
 	"time"
 
@@ -14,7 +15,7 @@ type uct struct {
 	goroutines int
 	iterations int
 	duration   time.Duration
-	root       Node
+	root       *decision
 }
 
 func WithGoroutines(goroutines int) option {
@@ -35,12 +36,39 @@ func WithDuration(duration time.Duration) option {
 	}
 }
 
-func NewUCT(options ...option) *uct {
-	u := &uct{}
+func NewUCT(state game.State, options ...option) *uct {
+	u := &uct{
+		root: newDecision(nil, state),
+	}
 	for _, option := range options {
 		option(u)
 	}
 	return u
+}
+
+func (u *uct) UpdateRoot(move game.Move, state game.State) {
+	index := utils.FindIndex(u.root.moves, move)
+	if index < 0 {
+		panic("Not a possible move from the root node")
+	}
+
+	if index >= len(u.root.children) { // Unexplored child
+		u.root = newDecision(nil, state)
+		return
+	}
+
+	switch child := u.root.children[index].(type) {
+	case *decision:
+		u.root = child
+	case *chance:
+		if grandChild := child.findChild(state); grandChild != nil {
+			u.root = grandChild
+			return
+		}
+		u.root = newDecision(nil, state)
+	default:
+		panic("Unknown child node type")
+	}
 }
 
 func (u *uct) FindNextMove(state game.State) game.Move {
