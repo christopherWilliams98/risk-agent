@@ -16,6 +16,9 @@ type ActionType int
 const (
 	MoveAction ActionType = iota
 	AttackAction
+	ReinforceAction
+	ManeuverAction
+	PassAction
 )
 
 // Action represents an action taken by a player.
