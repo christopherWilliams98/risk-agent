@@ -25,10 +25,23 @@ func (gm *GameMaster) InitializeGame() {
 	rules := game.NewStandardRules()
 	gs := game.NewGameState(gameMap, rules)
 
-	for id := 0; id < len(gs.Map.Cantons); id++ {
-		gs.Ownership[id] = (id % 2) + 1 // Alternate ownership between Player 1 and 2
-		gs.TroopCounts[id] = 3
+	// Assign territories to players
+	totalTerritories := len(gs.Map.Cantons)
+	//territoriesPerPlayer := totalTerritories / 2 // 13 territories per player
+
+	// Initialize ownership and troop counts
+	for id := 0; id < totalTerritories; id++ {
+		playerID := (id % 2) + 1
+		gs.Ownership[id] = playerID
+		gs.TroopCounts[id] = 1 // Start with 1 troop per territory
 	}
+
+	// Players have remaining troops to place
+	gs.PlayerTroops = map[int]int{
+		1: 27, // 40 - 13
+		2: 27,
+	}
+
 	gm.Communicator.UpdateGameState(gs)
 }
 
@@ -46,26 +59,58 @@ func (gm *GameMaster) RunGame() {
 			continue
 		}
 
-		// Receive action from the current player
-		action := gm.Communicator.ReceiveAction()
+		// Depending on the phase, handle actions
+		switch gs.Phase {
+		case game.InitialPlacementPhase:
+			// Players take turns placing their initial troops
+			gm.handleInitialPlacement(gs)
+		default:
+			// Regular gameplay
+			action := gm.Communicator.ReceiveAction()
 
-		// Validate that the action is from the correct player
-		if action.PlayerID != gs.CurrentPlayer {
-			// Handle invalid action
-			continue
+			// Validate that the action is from the correct player
+			if action.PlayerID != gs.CurrentPlayer {
+				// Handle invalid action
+				continue
+			}
+
+			// Apply the action
+			newGs := gs.Play(&game.GameMove{
+				ActionType:   action.Type,
+				FromCantonID: action.FromCantonID,
+				ToCantonID:   action.ToCantonID,
+				NumTroops:    action.NumTroops,
+			}).(*game.GameState)
+
+			// Update the global game state
+			gm.Communicator.UpdateGameState(newGs)
 		}
-
-		// Apply the action using gs.Play()
-		newGs := gs.Play(&game.GameMove{
-			ActionType:   action.Type,
-			FromCantonID: action.FromCantonID,
-			ToCantonID:   action.ToCantonID,
-			NumTroops:    action.NumTroops,
-		}).(*game.GameState)
-
-		// Update the global game state
-		gm.Communicator.UpdateGameState(newGs)
 	}
+}
+
+func (gm *GameMaster) handleInitialPlacement(gs *game.GameState) {
+	// Receive action from the current player
+	action := gm.Communicator.ReceiveAction()
+
+	// Validate action
+	if action.Type != game.ReinforceAction || action.PlayerID != gs.CurrentPlayer {
+		// Handle invalid action
+		return
+	}
+
+	// Apply the action
+	gs.TroopCounts[action.ToCantonID] += action.NumTroops
+	gs.PlayerTroops[gs.CurrentPlayer] -= action.NumTroops
+
+	// Check if the player has finished placing troops
+	if gs.PlayerTroops[gs.CurrentPlayer] == 0 {
+		gs.AdvancePhase()
+	} else {
+		// Switch to the next player
+		gs.CurrentPlayer = gs.NextPlayer()
+	}
+
+	gm.Communicator.UpdateGameState(gs)
 }
 
 // CheckGameOver determines if the game has ended.
@@ -86,8 +131,5 @@ func (gm *GameMaster) CheckGameOver(gs *game.GameState) bool {
 	}
 
 	// Check if only one player remains
-	if len(playerTerritories) == 1 {
-		return true
-	}
-	return false
+	return len(playerTerritories) == 1
 }
