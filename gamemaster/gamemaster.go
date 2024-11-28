@@ -71,6 +71,8 @@ func (gm *GameMaster) RunGame() {
 			// Validate that the action is from the correct player
 			if action.PlayerID != gs.CurrentPlayer {
 				// Handle invalid action
+				// Security: how do we make sure that it really is the right player
+				// websocket Look into it later! (low priority)
 				continue
 			}
 
