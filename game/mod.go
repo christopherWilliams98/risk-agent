@@ -1,16 +1,17 @@
-// Package game defines an agent that plays the game of Risk.
 package game
+
+// TODO: move type definitions to corresponding files then delete this file
 
 type Move interface {
 	IsDeterministic() bool
 }
 
+type StateHash uint64
+
 type State interface {
 	Player() string
 	LegalMoves() []Move
 	Play(Move) State
-	// State change from the last move
-	// TODO: type should be easy to compare equality
-	Delta() map[string]any
+	Hash() StateHash
 	Winner() string
 }

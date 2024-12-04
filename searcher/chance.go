@@ -1,7 +1,6 @@
 package searcher
 
 import (
-	"reflect"
 	"risk/game"
 	"sync"
 )
@@ -15,7 +14,7 @@ type chance struct {
 	visits   int
 }
 
-func newChance(parent Node, state game.State) *chance {
+func newChance(state game.State, parent Node) *chance {
 	return &chance{
 		parent:  parent,
 		player:  state.Player(),
@@ -28,31 +27,31 @@ func (c *chance) SelectOrExpand(state game.State) (Node, game.State, bool) {
 	c.Lock()
 	defer c.Unlock()
 
-	child := c.findChild(state)
-	if child != nil {
-		child.ApplyLoss()
-		return child, state, false
+	// Select if explored outcome
+	selected := true
+	child := c.selects(state)
+	// Expand if unexplored outcome
+	if child == nil {
+		child = c.expands(state)
+		selected = false
 	}
 
-	// Expand the chance node for the new state
-	child = c.addChild(state)
 	child.ApplyLoss()
-	return child, state, true
+	return child, state, selected
 }
 
-func (c *chance) findChild(state game.State) *decision {
-	expected := state.Delta()
+func (c *chance) selects(state game.State) *decision {
+	expected := state.Hash()
 	for _, child := range c.children {
-		// TODO: custom/more efficient comparison??
-		if reflect.DeepEqual(child.delta, expected) {
+		if child.hash == expected {
 			return child
 		}
 	}
 	return nil
 }
 
-func (c *chance) addChild(state game.State) *decision {
-	child := newDecision(c, state)
+func (c *chance) expands(state game.State) *decision {
+	child := newDecision(state, c)
 	c.children = append(c.children, child)
 	return child
 }
@@ -69,16 +68,20 @@ func (c *chance) Score(normalizer float64) float64 {
 	c.RLock()
 	defer c.RUnlock()
 
-	return ucb1(c.rewards, c.visits, normalizer)
+	if c.visits == 0 {
+		panic("cannot compute score for child with 0 visits")
+	}
+
+	return uct(c.rewards, c.visits, normalizer)
 }
 
-func (c *chance) Backup(rewarder func(string) float64) Node {
+func (c *chance) Backup(winner string) Node {
 	c.Lock()
 	defer c.Unlock()
 
 	c.reverseLoss()
 
-	c.rewards += rewarder(c.player)
+	c.rewards += computeReward(winner, c.player)
 	c.visits++
 
 	return c.parent
@@ -89,7 +92,7 @@ func (c *chance) reverseLoss() {
 	c.visits--
 }
 
-func (c *chance) Value() int {
+func (c *chance) Visits() int {
 	c.RLock()
 	defer c.RUnlock()
 
