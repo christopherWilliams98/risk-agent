@@ -36,7 +36,7 @@ func (c *chance) SelectOrExpand(state game.State) (Node, game.State, bool) {
 		selected = false
 	}
 
-	child.ApplyLoss()
+	child.applyLoss()
 	return child, state, selected
 }
 
@@ -56,7 +56,7 @@ func (c *chance) expands(state game.State) *decision {
 	return child
 }
 
-func (c *chance) ApplyLoss() {
+func (c *chance) applyLoss() {
 	c.Lock()
 	defer c.Unlock()
 
@@ -64,7 +64,7 @@ func (c *chance) ApplyLoss() {
 	c.visits++
 }
 
-func (c *chance) Score(normalizer float64) float64 {
+func (c *chance) score(normalizer float64) float64 {
 	c.RLock()
 	defer c.RUnlock()
 

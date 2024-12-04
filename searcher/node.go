@@ -9,8 +9,8 @@ type Node interface {
 	SelectOrExpand(state game.State) (child Node, childState game.State, selected bool)
 	Backup(winner string) Node
 	Visits() int
-	ApplyLoss()
-	Score(normalizer float64) float64
+	applyLoss()
+	score(normalizer float64) float64
 }
 
 func uct(rewards float64, visits int, c2LnN float64) float64 {

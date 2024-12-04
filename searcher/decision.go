@@ -57,7 +57,7 @@ func (d *decision) SelectOrExpand(state game.State) (Node, game.State, bool) {
 		selected = true
 	}
 
-	child.ApplyLoss()
+	child.applyLoss()
 	return child, state, selected
 }
 
@@ -67,10 +67,10 @@ func (d *decision) expands(state game.State) (Node, game.State) {
 	state = state.Play(move)
 
 	var child Node
-	if move.IsDeterministic() {
-		child = newDecision(state, d)
-	} else {
+	if move.IsStochastic() {
 		child = newChance(state, d)
+	} else {
+		child = newDecision(state, d)
 	}
 
 	d.children[move] = child
@@ -89,7 +89,7 @@ func (d *decision) selects(state game.State) (Node, game.State) {
 	maxScore := math.Inf(-1)
 	for move, child := range d.children {
 		// TODO: flip rewards/score if child.player != d.player
-		score := child.Score(normalizer)
+		score := child.score(normalizer)
 		if score > maxScore {
 			maxScore = score
 			maxMove = move
@@ -99,7 +99,7 @@ func (d *decision) selects(state game.State) (Node, game.State) {
 	return d.children[maxMove], state.Play(maxMove)
 }
 
-func (d *decision) ApplyLoss() {
+func (d *decision) applyLoss() {
 	d.Lock()
 	defer d.Unlock()
 
@@ -107,7 +107,7 @@ func (d *decision) ApplyLoss() {
 	d.visits++
 }
 
-func (d *decision) Score(normalizer float64) float64 {
+func (d *decision) score(normalizer float64) float64 {
 	d.RLock()
 	defer d.RUnlock()
 

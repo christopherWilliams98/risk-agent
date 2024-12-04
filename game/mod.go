@@ -3,7 +3,7 @@ package game
 // TODO: move type definitions to corresponding files then delete this file
 
 type Move interface {
-	IsDeterministic() bool
+	IsStochastic() bool
 }
 
 type StateHash uint64
