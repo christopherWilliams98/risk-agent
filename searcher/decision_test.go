@@ -36,9 +36,10 @@ func TestDecisionSelectOrExpand(t *testing.T) {
 	t.Run("selecting fully expanded node (all deterministic moves explored)", func(t *testing.T) {
 		maxMove := mockMove{id: 1}
 		maxChild := &decision{rewards: 1, visits: 1}
+		otherChild := &decision{rewards: 0, visits: 1}
 		node := &decision{
 			moves:    []game.Move{},
-			children: map[game.Move]Node{mockMove{id: 0}: &decision{rewards: 0, visits: 1}, maxMove: maxChild},
+			children: map[game.Move]Node{mockMove{id: 0}: otherChild, maxMove: maxChild},
 			rewards:  1,
 			visits:   2,
 		}
@@ -52,7 +53,7 @@ func TestDecisionSelectOrExpand(t *testing.T) {
 		require.Equal(t, 1+LOSS, gotChild.(*decision).rewards, "Child should apply a temporary loss")
 		require.Equal(t, 2, gotChild.(*decision).visits, "Child should apply a temporary loss")
 		require.Equal(t, []game.Move{maxMove}, gotState.(mockState).played, "State should update by the move to the max policy child")
-		require.True(t, gotSelected, "Node should select the max policy child")
+		require.True(t, gotSelected, "Node should perform selection")
 		require.Equal(t, 1.0, node.rewards, "Node stats should not change")
 		require.Equal(t, 2, node.visits, "Node stats should not change")
 	})
@@ -60,9 +61,10 @@ func TestDecisionSelectOrExpand(t *testing.T) {
 	t.Run("selecting fully expanded node (all stochastic moves explored)", func(t *testing.T) {
 		maxMove := mockMove{id: 1, stochastic: true}
 		maxChild := &chance{rewards: 1, visits: 1}
+		otherChild := &chance{rewards: 0, visits: 1}
 		node := &decision{
 			moves:    []game.Move{},
-			children: map[game.Move]Node{mockMove{id: 0, stochastic: true}: &chance{rewards: 0, visits: 1}, maxMove: maxChild},
+			children: map[game.Move]Node{mockMove{id: 0, stochastic: true}: otherChild, maxMove: maxChild},
 			rewards:  1,
 			visits:   2,
 		}
@@ -76,7 +78,57 @@ func TestDecisionSelectOrExpand(t *testing.T) {
 		require.Equal(t, 1+LOSS, gotChild.(*chance).rewards, "Child should apply a temporary loss")
 		require.Equal(t, 2, gotChild.(*chance).visits, "Child should apply a temporary loss")
 		require.Equal(t, []game.Move{maxMove}, gotState.(mockState).played, "State should update by the move to the max policy child")
-		require.True(t, gotSelected, "Node should select the max policy child")
+		require.True(t, gotSelected, "Node should perform selection")
+		require.Equal(t, 1.0, node.rewards, "Node stats should not change")
+		require.Equal(t, 2, node.visits, "Node stats should not change")
+	})
+
+	t.Run("selecting fully expanded node (all deterministic moves explored) with turn change", func(t *testing.T) {
+		minMove := mockMove{id: 1}
+		minChild := &decision{player: "player2", rewards: 0, visits: 1}
+		otherChild := &decision{player: "player2", rewards: 1, visits: 1}
+		node := &decision{
+			player:   "player1",
+			moves:    []game.Move{},
+			children: map[game.Move]Node{mockMove{id: 0}: otherChild, minMove: minChild},
+			rewards:  1,
+			visits:   2,
+		}
+		state := mockState{}
+
+		gotChild, gotState, gotSelected := node.SelectOrExpand(state)
+
+		require.Equal(t, minChild, gotChild, "Node should select child with max policy value that minimizes opponent rewards")
+		require.IsType(t, &decision{}, gotChild, "Child should be a decision node")
+		require.Equal(t, LOSS, gotChild.(*decision).rewards, "Child should apply a temporary loss")
+		require.Equal(t, 2, gotChild.(*decision).visits, "Child should apply a temporary loss")
+		require.Equal(t, []game.Move{minMove}, gotState.(mockState).played, "State should update by the move to the max policy child")
+		require.True(t, gotSelected, "Node should perform selection")
+		require.Equal(t, 1.0, node.rewards, "Node stats should not change")
+		require.Equal(t, 2, node.visits, "Node stats should not change")
+	})
+
+	t.Run("selecting fully expanded node (all stochastic moves explored) with turn change", func(t *testing.T) {
+		minMove := mockMove{id: 1, stochastic: true}
+		minChild := &chance{player: "player2", rewards: 0, visits: 1}
+		otherChild := &chance{player: "player2", rewards: 1, visits: 1}
+		node := &decision{
+			player:   "player1",
+			moves:    []game.Move{},
+			children: map[game.Move]Node{mockMove{id: 0, stochastic: true}: otherChild, minMove: minChild},
+			rewards:  1,
+			visits:   2,
+		}
+		state := mockState{}
+
+		gotChild, gotState, gotSelected := node.SelectOrExpand(state)
+
+		require.Equal(t, minChild, gotChild, "Node should select child with max policy value that minimizes opponent rewards")
+		require.IsType(t, &chance{}, gotChild, "Child should be a chance node")
+		require.Equal(t, LOSS, gotChild.(*chance).rewards, "Child should apply a temporary loss")
+		require.Equal(t, 2, gotChild.(*chance).visits, "Child should apply a temporary loss")
+		require.Equal(t, []game.Move{minMove}, gotState.(mockState).played, "State should update by the move to the max policy child")
+		require.True(t, gotSelected, "Node should perform selection")
 		require.Equal(t, 1.0, node.rewards, "Node stats should not change")
 		require.Equal(t, 2, node.visits, "Node stats should not change")
 	})
@@ -99,7 +151,7 @@ func TestDecisionSelectOrExpand(t *testing.T) {
 		require.Equal(t, 2, len(node.children), "Node should add a new child")
 		require.Equal(t, []game.Move{unexploredMove},
 			gotState.(mockState).played, "State should update by the move to the unexplored child")
-		require.False(t, gotSelected, "Node should expand with the unexplored child")
+		require.False(t, gotSelected, "Node should perform expansion")
 	})
 
 	t.Run("expanding node with unexplored stochastic moves", func(t *testing.T) {
@@ -119,7 +171,7 @@ func TestDecisionSelectOrExpand(t *testing.T) {
 		require.Equal(t, 1, gotChild.(*chance).visits, "Child should apply a temporary loss")
 		require.Equal(t, []game.Move{unexploredMove},
 			gotState.(mockState).played, "State should update by the move to the unexplored child")
-		require.False(t, gotSelected, "Node should expand with the unexplored child")
+		require.False(t, gotSelected, "Node should perform expansion")
 		require.Equal(t, 2, len(node.children), "Node should add a new child")
 	})
 
@@ -131,7 +183,7 @@ func TestDecisionSelectOrExpand(t *testing.T) {
 
 		require.Equal(t, node, gotChild, "Should return the same node")
 		require.Equal(t, mockState{}, gotState, "Should return the same state")
-		require.False(t, gotSelected, "Should not select any child")
+		require.False(t, gotSelected, "Should not select any child or expand")
 	})
 }
 
@@ -339,7 +391,7 @@ func TestDecisionRaceConditions(t *testing.T) {
 				"Node should select the child")
 			require.Equal(t, move, gotState.(mockState).played[0],
 				"State should update by the move to the child")
-			require.True(t, gotSelected, "Node should select the child")
+			require.True(t, gotSelected, "Node should perform selection")
 		}()
 
 		// Goroutine 2: Backup through the node
