@@ -81,7 +81,7 @@ func (m *MCTS) RunSimulations(state game.State, lineage []Segment) map[game.Move
 	// Reuse subtree if possible
 	node := m.findSubtree(lineage)
 	if node == nil {
-		node = newDecision(state, nil)
+		node = newDecision(nil, state)
 	} else {
 		node.parent = nil
 	}
@@ -101,7 +101,7 @@ func (m *MCTS) RunSimulations(state game.State, lineage []Segment) map[game.Move
 	// TODO: extract to method on decision node
 	visits := make(map[game.Move]int, len(m.root.children))
 	for move, child := range m.root.children {
-		visits[move] = child.Visits()
+		_, _, visits[move] = child.stats()
 	}
 	return visits
 }

@@ -14,10 +14,10 @@ type chance struct {
 	visits   int
 }
 
-func newChance(state game.State, parent Node) *chance {
+func newChance(parent *decision) *chance {
 	return &chance{
 		parent:  parent,
-		player:  state.Player(),
+		player:  parent.player,
 		rewards: 0,
 		visits:  0,
 	}
@@ -51,7 +51,7 @@ func (c *chance) selects(state game.State) *decision {
 }
 
 func (c *chance) expands(state game.State) *decision {
-	child := newDecision(state, c)
+	child := newDecision(c, state)
 	c.children = append(c.children, child)
 	return child
 }
@@ -64,15 +64,11 @@ func (c *chance) applyLoss() {
 	c.visits++
 }
 
-func (c *chance) score(normalizer float64) float64 {
+func (c *chance) stats() (player string, rewards float64, visits int) {
 	c.RLock()
 	defer c.RUnlock()
 
-	if c.visits == 0 {
-		panic("cannot compute score for child with 0 visits")
-	}
-
-	return uct(c.rewards, c.visits, normalizer)
+	return c.player, c.rewards, c.visits
 }
 
 func (c *chance) Backup(winner string) Node {
