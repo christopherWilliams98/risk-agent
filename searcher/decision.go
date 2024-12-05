@@ -101,8 +101,8 @@ func (d *decision) selects(state game.State) (Node, game.State) {
 		if visits == 0 {
 			panic("unexplored child node (0 visits)")
 		}
-		// Maximize current player's rewards or minimize opponent's rewards
-		if player != d.player { // Turn changes
+		// Maximize my chance of winning or if turn changes, minimize the opponent's
+		if player != d.player {
 			rewards = -rewards // Negate opponent's rewards
 		}
 		value := policy.evaluate(rewards, visits)
