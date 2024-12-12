@@ -14,6 +14,9 @@ func newUCT(cSquared float64, N int) *uct {
 }
 
 func (u uct) evaluate(q float64, n int) float64 {
+	if n == 0 {
+		panic("n cannot be 0")
+	}
 	// UCT = q/n + sqrt(c^2*ln(N)/n)
 	return q/float64(n) + math.Sqrt(u.numerator/float64(n))
 }
