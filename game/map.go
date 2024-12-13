@@ -5,26 +5,17 @@ type Canton struct {
 	Name         string // Full name of the canton
 	Abbreviation string // Abbreviation
 	AdjacentIDs  []int  // IDs of adjacent cantons
-	RegionID     int    // ID of the region the canton belongs to
 }
 
-type Region struct {
-	ID        int    // Unique identifier for the region
-	Name      string // Name of the region
-	CantonIDs []int  // IDs of cantons in this region
-}
-
-// Map represents the game map, containing all the cantons and regions.
+// Map represents the game map, containing all the cantons.
 type Map struct {
 	Cantons map[int]*Canton // Maps canton IDs to Canton pointers
-	Regions map[int]*Region // Maps region IDs to Region pointers
 }
 
 // NewMap creates and returns a new Map instance.
 func NewMap() *Map {
 	return &Map{
 		Cantons: make(map[int]*Canton),
-		Regions: make(map[int]*Region),
 	}
 }
 
@@ -43,7 +34,7 @@ func (m *Map) AddBorder(cantonID1, cantonID2 int) {
 	}
 }
 
-// contains checks if a slice contains a specific item.
+// contains checks if a slice contains a specific item. (avoid duplicate ownership etc..)
 func contains(slice []int, item int) bool {
 	for _, v := range slice {
 		if v == item {
@@ -53,35 +44,19 @@ func contains(slice []int, item int) bool {
 	return false
 }
 
-// CreateMap initializes the map with cantons, regions, and their adjacents.
+// initialize the map with cantons and their adjacents
 func CreateMap() *Map {
 	m := NewMap()
 
-	// Initialize regions
-	m.Regions = make(map[int]*Region)
-	for regionID, regionName := range regionNames {
-		m.Regions[regionID] = &Region{
-			ID:        regionID,
-			Name:      regionName,
-			CantonIDs: []int{},
-		}
-	}
-
 	// Initialize cantons
 	for id, abbrev := range cantonAbbreviations {
-		regionID := 2 // default to German region
-		if val, ok := cantonRegionMap[abbrev]; ok {
-			regionID = val
-		}
 		canton := &Canton{
 			ID:           id,
 			Name:         cantonNames[id],
 			Abbreviation: abbrev,
 			AdjacentIDs:  []int{},
-			RegionID:     regionID,
 		}
 		m.AddCanton(canton)
-		m.Regions[regionID].CantonIDs = append(m.Regions[regionID].CantonIDs, canton.ID)
 	}
 
 	// Add borders between cantons
@@ -96,25 +71,7 @@ func CreateMap() *Map {
 	return m
 }
 
-// REGION DATA
-var regionNames = map[int]string{
-	1: "French",
-	2: "German",
-	3: "Italian",
-}
-
-// Mapping of canton abbreviations to region IDs
-var cantonRegionMap = map[string]int{
-	// French-speaking cantons
-	"GE": 1,
-	"VD": 1,
-	"NE": 1,
-	"JU": 1,
-	"FR": 1,
-	"VS": 1,
-	// Italian-speaking canton
-	"TI": 3,
-}
+// GLOBAL DATA. I didn't actually have access to the paper or the map, so I just came up with this basic representation of the map. This whole part needs to be replaced with the actual map data.
 
 // List of canton abbreviations
 var cantonAbbreviations = []string{

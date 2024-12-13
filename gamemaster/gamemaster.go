@@ -20,28 +20,11 @@ func NewGameMaster(comm communication.Communicator) *GameMaster {
 
 // InitializeGame sets up the initial game state.
 func (gm *GameMaster) InitializeGame() {
-	// Create the initial game state
-	gameMap := game.CreateMap()
-	rules := game.NewStandardRules()
-	gs := game.NewGameState(gameMap, rules)
-
-	// Assign territories to players
-	totalTerritories := len(gs.Map.Cantons)
-	//territoriesPerPlayer := totalTerritories / 2 // 13 territories per player
-
-	// Initialize ownership and troop counts
-	for id := 0; id < totalTerritories; id++ {
-		playerID := (id % 2) + 1
-		gs.Ownership[id] = playerID
-		gs.TroopCounts[id] = 1 // Start with 1 troop per territory
+	gs := gm.Communicator.GetGameState()
+	for id := 0; id < len(gs.Map.Cantons); id++ {
+		gs.Ownership[id] = (id % 2) + 1 //TODO this, right now it just adds 3 troops to each canton with alternating ids for ownership. this should be handled by the player. (like a setup action)
+		gs.TroopCounts[id] = 3
 	}
-
-	// Players have remaining troops to place
-	gs.PlayerTroops = map[int]int{
-		1: 27, // 40 - 13
-		2: 27,
-	}
-
 	gm.Communicator.UpdateGameState(gs)
 }
 
@@ -49,51 +32,47 @@ func (gm *GameMaster) InitializeGame() {
 func (gm *GameMaster) RunGame() {
 	gameOver := false
 	for !gameOver {
-		// Get the latest game state
-		gs := gm.Communicator.GetGameState()
-
-		// Check if it's the end of the game
-		if gm.CheckGameOver(gs) {
-			fmt.Printf("Player %d wins!\n", gs.CurrentPlayer)
-			gameOver = true
-			continue
-		}
-
-		// For all phases, do the same steps now:
+		// Receive action from a player
 		action := gm.Communicator.ReceiveAction()
 
-		if action.PlayerID != gs.CurrentPlayer {
-			continue
+		// Get the latest game state from the game master
+		gs := gm.Communicator.GetGameState()
+
+		// Resolve the action
+		switch action.Type {
+		case communication.MoveAction:
+			err := gs.MoveTroops(action.FromCantonID, action.ToCantonID, action.NumTroops)
+			if err != nil {
+				fmt.Printf("GameMaster: Move error: %v\n", err)
+			}
+		case communication.AttackAction:
+			err := gs.Attack(action.FromCantonID, action.ToCantonID, action.NumTroops)
+			if err != nil {
+				fmt.Printf("GameMaster: Attack error: %v\n", err)
+			}
+
+			// TODO - add more action types like specific decision in seting up the game, assigning troops when you gain them, etc etc..
+
 		}
 
-		newGs := gs.Play(&game.GameMove{
-			ActionType:   action.Type,
-			FromCantonID: action.FromCantonID,
-			ToCantonID:   action.ToCantonID,
-			NumTroops:    action.NumTroops,
-		}).(*game.GameState)
+		// Update the global game state
+		gm.Communicator.UpdateGameState(gs)
 
-		gm.Communicator.UpdateGameState(newGs)
+		// Check for game over - TODO - rule constraints? - I am unsure how and where to implement the entire constraint thing, need to brainstorm and discuss.
+		if gm.CheckGameOver(gs) {
+			fmt.Printf("Player %d wins!\n", action.PlayerID)
+			gameOver = true
+		}
 	}
 }
 
 // CheckGameOver determines if the game has ended.
 func (gm *GameMaster) CheckGameOver(gs *game.GameState) bool {
-	// Check if any player has no territories
-	playerTerritories := make(map[int]int)
+	firstOwner := gs.Ownership[0]
 	for _, owner := range gs.Ownership {
-		if owner != -1 {
-			playerTerritories[owner]++
+		if owner != firstOwner {
+			return false
 		}
 	}
-
-	// If any player has no territories, game is over
-	for playerID, territories := range playerTerritories {
-		if territories == 0 {
-			fmt.Printf("Player %d has been eliminated!\n", playerID)
-		}
-	}
-
-	// Check if only one player remains
-	return len(playerTerritories) == 1
+	return true
 }

@@ -3,18 +3,25 @@ package main
 import (
 	"risk/communication/client"
 	"risk/communication/server"
+	"risk/game"
 	"risk/gamemaster"
 	"risk/player"
 	"sync"
 )
 
 func main() {
-	// Initialize the ServerCommunicator
-	serverComm := server.NewServerCommunicator()
-	go serverComm.Start()
+	// Initialize the game map and global game state
+	gameMap := game.CreateMap()
 
-	// Initialize the GameMaster's ClientCommunicator
-	gmComm := client.NewClientCommunicator("http://localhost:8080")
+	// Initialize the game rules, right now just using the simplified standard rules
+	rules := game.NewStandardRules()
+
+	globalGameState := game.NewGameState(gameMap, rules)
+
+	// Initialize the GameMaster's ServerCommunicator
+	gmComm := server.NewServerCommunicator(globalGameState)
+
+	// Initialize the GameMaster
 	gameMaster := gamemaster.NewGameMaster(gmComm)
 
 	// Initialize Players with ClientCommunicator

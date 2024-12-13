@@ -15,16 +15,16 @@ type ServerCommunicator struct {
 }
 
 // NewServerCommunicator initializes and returns a new ServerCommunicator.
-func NewServerCommunicator() *ServerCommunicator {
+func NewServerCommunicator(initialState *game.GameState) *ServerCommunicator {
 	sc := &ServerCommunicator{
-		gameState: nil, // Initialize to nil asGameMaster will set it
+		gameState: initialState,
 		actions:   make(chan communication.Action, 100),
 	}
+	go sc.startServer()
 	return sc
 }
 
-// StartServer starts the HTTP server.
-func (sc *ServerCommunicator) Start() {
+func (sc *ServerCommunicator) startServer() {
 	http.HandleFunc("/getGameState", sc.handleGetGameState)
 	http.HandleFunc("/updateGameState", sc.handleUpdateGameState)
 	http.HandleFunc("/sendAction", sc.handleSendAction)
@@ -35,10 +35,6 @@ func (sc *ServerCommunicator) Start() {
 func (sc *ServerCommunicator) handleGetGameState(w http.ResponseWriter, r *http.Request) {
 	sc.mutex.RLock()
 	defer sc.mutex.RUnlock()
-	if sc.gameState == nil {
-		w.WriteHeader(http.StatusNotFound)
-		return
-	}
 	json.NewEncoder(w).Encode(sc.gameState)
 }
 
@@ -70,9 +66,6 @@ func (sc *ServerCommunicator) handleReceiveAction(w http.ResponseWriter, r *http
 func (sc *ServerCommunicator) GetGameState() *game.GameState {
 	sc.mutex.RLock()
 	defer sc.mutex.RUnlock()
-	if sc.gameState == nil {
-		return nil
-	}
 	return sc.gameState.Copy()
 }
 

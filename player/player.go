@@ -1,6 +1,8 @@
 package player
 
 import (
+	"fmt"
+	"math/rand"
 	"risk/communication"
 	"risk/game"
 )
@@ -20,52 +22,72 @@ func NewPlayer(id int, comm communication.Communicator) *Player {
 	}
 }
 
-func (p *Player) SyncGameState() {
-	p.LocalGameState = p.Communicator.GetGameState()
-}
-
 // Play starts the player's turn loop.
 func (p *Player) Play() {
 	for {
+
 		p.SyncGameState()
 
-		// action := p.TakeTurn()
+		action := p.TakeTurn()
 
-		// if action.Type == -1 {
-		// 	fmt.Printf("Player %d has no possible actions. Ending turn.\n", p.ID)
-		// 	return
-		// }
+		if action.Type == -1 {
+			fmt.Printf("Player %d has no possible actions. Ending turn.\n", p.ID)
+			return
+		}
 
-		// action.PlayerID = p.ID
-		// p.Communicator.SendAction(action)
+		action.PlayerID = p.ID
+		p.Communicator.SendAction(action)
 	}
 }
 
 // update the player's local game state.
-// func (p *Player) TakeTurn() game.Action {
-// 	p.SyncGameState()
-// 	gs := p.LocalGameState
+func (p *Player) SyncGameState() {
+	p.LocalGameState = p.Communicator.GetGameState()
+}
 
-// 	// Use MCTS to find the best move
-// 	// mcts := &searcher.UCT{}
-// 	// bestMove := mcts.FindNextMove(gs)
+// decides on an action to perform.
+func (p *Player) TakeTurn() communication.Action {
+	possibleActions := p.generatePossibleActions()
+	if len(possibleActions) == 0 {
+		return communication.Action{Type: -1} // No possible actions
+	}
 
-// 	if bestMove == nil {
-// 		possibleMoves := gs.LegalMoves()
-// 		if len(possibleMoves) == 0 {
-// 			return game.Action{Type: PassAction}
-// 		}
-// 		bestMove = possibleMoves[rand.Intn(len(possibleMoves))]
-// 	}
+	// Placeholder TODO right now its just random.
+	chosenAction := possibleActions[rand.Intn(len(possibleActions))]
+	return chosenAction
+}
 
-// 	// Convert GameMove to communication.Action
-// 	gameMove := bestMove.(*game.GameMove)
-// 	action := game.Action{
-// 		PlayerID:     p.ID,
-// 		Type:         gameMove.ActionType,
-// 		FromCantonID: gameMove.FromCantonID,
-// 		ToCantonID:   gameMove.ToCantonID,
-// 		NumTroops:    gameMove.NumTroops,
-// 	}
-// 	return action
-// }
+// TODO implement the changes with rules.
+// generatePossibleActions generates all possible actions for the player.
+func (p *Player) generatePossibleActions() []communication.Action {
+	var actions []communication.Action
+	gs := p.LocalGameState
+
+	for cantonID, owner := range gs.Ownership {
+		if owner == p.ID {
+			// Move actions
+			for _, adjID := range gs.Map.Cantons[cantonID].AdjacentIDs {
+				if gs.Ownership[adjID] == p.ID && gs.TroopCounts[cantonID] > 1 {
+					actions = append(actions, communication.Action{
+						Type:         communication.MoveAction,
+						FromCantonID: cantonID,
+						ToCantonID:   adjID,
+						NumTroops:    gs.TroopCounts[cantonID] - 1,
+					})
+				}
+			}
+			// Attack actions
+			for _, adjID := range gs.Map.Cantons[cantonID].AdjacentIDs {
+				if gs.Ownership[adjID] != p.ID && gs.TroopCounts[cantonID] > 1 {
+					actions = append(actions, communication.Action{
+						Type:         communication.AttackAction,
+						FromCantonID: cantonID,
+						ToCantonID:   adjID,
+						NumTroops:    gs.TroopCounts[cantonID] - 1,
+					})
+				}
+			}
+		}
+	}
+	return actions
+}
