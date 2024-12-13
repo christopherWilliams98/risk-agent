@@ -59,7 +59,7 @@ func NewGameState(m *Map, rules Rules) *GameState {
 	return gs
 }
 
-func (gs *GameState) Copy() *GameState {
+func (gs GameState) Copy() *GameState {
 	// Copy troop counts
 	troopCountsCopy := make([]int, len(gs.TroopCounts))
 	copy(troopCountsCopy, gs.TroopCounts)
@@ -292,7 +292,7 @@ func (gs *GameState) ArmiesForThisExchange(exchangeNumber int) int {
 }
 
 // LegalMoves returns all legal moves for the current player.
-func (gs *GameState) LegalMoves() []Move {
+func (gs GameState) LegalMoves() []Move {
 	switch gs.Phase {
 	case InitialPlacementPhase:
 		// Generate legal initial placement moves
@@ -528,7 +528,7 @@ func min(a, b int) int {
 }
 
 // Player returns the identifier of the current player.
-func (gs *GameState) Player() string {
+func (gs GameState) Player() string {
 	return fmt.Sprintf("Player%d", gs.CurrentPlayer)
 }
 
@@ -542,7 +542,7 @@ func (gs *GameState) AreAdjacent(cantonID1, cantonID2 int) bool {
 	return false
 }
 
-func (gs *GameState) Hash() StateHash {
+func (gs GameState) Hash() StateHash {
 	hasher := fnv.New64a()
 
 	// Hash current player
@@ -605,7 +605,7 @@ func (gs *GameState) AreConnected(fromID, toID, playerID int) bool {
 	return false
 }
 
-func (gs *GameState) Play(move Move) State {
+func (gs GameState) Play(move Move) State {
 	newGs := gs.Copy()
 	gameMove := move.(*GameMove)
 
