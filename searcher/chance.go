@@ -23,7 +23,7 @@ func newChance(parent *decision) *chance {
 	}
 }
 
-func (c *chance) SelectOrExpand(state game.State) (Node, game.State, bool) {
+func (c *chance) SelectOrExpand(state *game.GameState) (Node, game.State, bool) {
 	c.Lock()
 	defer c.Unlock()
 
@@ -40,7 +40,7 @@ func (c *chance) SelectOrExpand(state game.State) (Node, game.State, bool) {
 	return child, state, selected
 }
 
-func (c *chance) selects(state game.State) *decision {
+func (c *chance) selects(state *game.GameState) *decision { // pass a pointer TODO ask Zhe
 	expected := state.Hash()
 	for _, child := range c.children {
 		if child.hash == expected {
@@ -50,7 +50,7 @@ func (c *chance) selects(state game.State) *decision {
 	return nil
 }
 
-func (c *chance) expands(state game.State) *decision {
+func (c *chance) expands(state *game.GameState) *decision {
 	child := newDecision(c, state)
 	c.children = append(c.children, child)
 	return child

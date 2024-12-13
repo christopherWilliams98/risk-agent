@@ -17,7 +17,7 @@ type decision struct {
 	visits   int
 }
 
-func newDecision(parent Node, state game.State) *decision {
+func newDecision(parent Node, state *game.GameState) *decision {
 	// TODO: randomize moves
 	// TODO: prioritize 'pass' moves (in attack and maneuver phases)
 	moves := state.LegalMoves()
