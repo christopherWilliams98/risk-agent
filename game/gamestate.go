@@ -58,7 +58,6 @@ func NewGameState(m *Map, rules Rules) *GameState {
 	return gs
 }
 
-// copy of the GameState.
 func (gs *GameState) Copy() *GameState {
 	// Copy troop counts
 	troopCountsCopy := make([]int, len(gs.TroopCounts))
@@ -74,19 +73,34 @@ func (gs *GameState) Copy() *GameState {
 		playerTroopsCopy[key] = value
 	}
 
+	// Deep copy PlayerHands
+	playerHandsCopy := make([][]RiskCard, len(gs.PlayerHands))
+	for i, hand := range gs.PlayerHands {
+		handCopy := make([]RiskCard, len(hand))
+		copy(handCopy, hand)
+		playerHandsCopy[i] = handCopy
+	}
+
+	// Deep copy Cards and DiscardedCards if necessary
+	cardsCopy := make([]RiskCard, len(gs.Cards))
+	copy(cardsCopy, gs.Cards)
+
+	discardedCardsCopy := make([]RiskCard, len(gs.DiscardedCards))
+	copy(discardedCardsCopy, gs.DiscardedCards)
+
 	return &GameState{
-		Map:               gs.Map,
+		Map:               gs.Map, // Assuming Map is immutable
 		TroopCounts:       troopCountsCopy,
 		Ownership:         ownershipCopy,
-		Rules:             gs.Rules,
+		Rules:             gs.Rules, // Assuming Rules is immutable
 		CurrentPlayer:     gs.CurrentPlayer,
-		LastMove:          gs.LastMove,
+		LastMove:          gs.LastMove, // Assuming Move is immutable or handled appropriately
 		Phase:             gs.Phase,
 		PlayerTroops:      playerTroopsCopy,
 		TroopsToPlace:     gs.TroopsToPlace,
-		Cards:             gs.Cards,
-		DiscardedCards:    gs.DiscardedCards,
-		PlayerHands:       gs.PlayerHands,
+		Cards:             cardsCopy,
+		DiscardedCards:    discardedCardsCopy,
+		PlayerHands:       playerHandsCopy,
 		Exchanges:         gs.Exchanges,
 		ConqueredThisTurn: gs.ConqueredThisTurn,
 	}
@@ -276,7 +290,7 @@ func (gs *GameState) ArmiesForThisExchange(exchangeNumber int) int {
 }
 
 // LegalMoves returns all legal moves for the current player.
-func (gs GameState) LegalMoves() []Move {
+func (gs *GameState) LegalMoves() []Move {
 	switch gs.Phase {
 	case InitialPlacementPhase:
 		// Generate legal initial placement moves
@@ -526,7 +540,7 @@ func (gs *GameState) AreAdjacent(cantonID1, cantonID2 int) bool {
 	return false
 }
 
-func (gs *GameState) Hash() uint64 {
+func (gs *GameState) Hash() StateHash {
 	hasher := fnv.New64a()
 
 	// Hash current player
@@ -554,7 +568,7 @@ func (gs *GameState) Hash() uint64 {
 		binary.Write(hasher, binary.LittleEndian, int64(troops))
 	}
 
-	return hasher.Sum64()
+	return StateHash(hasher.Sum64())
 }
 
 // Just BFS
