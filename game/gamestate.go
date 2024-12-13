@@ -34,6 +34,7 @@ type GameState struct {
 	PlayerHands       [][]RiskCard // Player hands
 	Exchanges         int          // Number of exchanges
 	ConqueredThisTurn bool         // Whether a territory was conquered this turn
+	Won               string       // The player winner of the game, "" if no winner yet
 }
 
 // NewGameState initializes and returns a new GameState.
@@ -103,6 +104,7 @@ func (gs *GameState) Copy() *GameState {
 		PlayerHands:       playerHandsCopy,
 		Exchanges:         gs.Exchanges,
 		ConqueredThisTurn: gs.ConqueredThisTurn,
+		Won:               gs.Won,
 	}
 }
 
@@ -699,6 +701,10 @@ func (gs *GameState) Play(move Move) State {
 
 	// Update the last move
 	newGs.LastMove = move
+
+	// Check for winner
+	newGs.Won = newGs.CheckWinner()
+
 	return newGs
 }
 
@@ -780,7 +786,12 @@ func (gs *GameState) NextPlayer() int {
 	return 1
 }
 
+// gets the winner of the game
 func (gs *GameState) Winner() string {
+	return gs.Won
+}
+
+func (gs *GameState) CheckWinner() string {
 	// Count how many territories each player owns
 	playerTerritories := make(map[int]int)
 	for _, owner := range gs.Ownership {

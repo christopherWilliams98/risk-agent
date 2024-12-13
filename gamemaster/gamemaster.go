@@ -18,6 +18,8 @@ func NewGameMaster(comm communication.Communicator) *GameMaster {
 	}
 }
 
+// TODO REFACTOR, THIS SHOULD ALL BE IN GAMESTATE
+
 // InitializeGame sets up the initial game state.
 func (gm *GameMaster) InitializeGame() {
 	// Create the initial game state
