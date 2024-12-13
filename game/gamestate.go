@@ -765,3 +765,23 @@ func (gs *GameState) NextPlayer() int {
 	}
 	return 1
 }
+
+func (gs *GameState) Winner() string {
+	// Count how many territories each player owns
+	playerTerritories := make(map[int]int)
+	for _, owner := range gs.Ownership {
+		if owner > 0 {
+			playerTerritories[owner]++
+		}
+	}
+
+	// If only one player has territories, that player is the winner
+	if len(playerTerritories) == 1 {
+		for playerID := range playerTerritories {
+			return fmt.Sprintf("Player%d", playerID)
+		}
+	}
+
+	// otherwise return empty string
+	return ""
+}

@@ -47,6 +47,8 @@ func (e *localEngine) Init() (game.State, UpdateGetter) {
 	rules := game.NewStandardRules()
 	gs := game.NewGameState(gameMap, rules)
 
+	//TODO Refactor in gamestate
+
 	// Assign territories to players TODO IO (input from players)
 	totalTerritories := len(gs.Map.Cantons)
 	for id := 0; id < totalTerritories; id++ {
@@ -66,19 +68,26 @@ func (e *localEngine) Init() (game.State, UpdateGetter) {
 
 	e.state = gs
 	e.updateCh = make(chan update, 1) // TODO: buffer size? play around
-	//return a copy of the state
+	var lastUpdate *update            // Store the last update here
 	return e.state, func() (game.Move, game.State) {
 		select {
 		case u, ok := <-e.updateCh:
 			if !ok { // Game over
 				return nil, nil
 			}
-			// return copies
+			lastUpdate = &u
 			stateCopy := *(u.state.(*game.GameState))
 			return u.move, &stateCopy
 		default:
-			// No updates yet, return nil immediately
-			return nil, nil
+			// No new updates from the channel
+			if lastUpdate != nil {
+				stateCopy := *(lastUpdate.state.(*game.GameState))
+				return lastUpdate.move, &stateCopy
+			}
+
+			// If no lastUpdate return current engine state
+			stateCopy := *(e.state.(*game.GameState))
+			return nil, &stateCopy
 		}
 	}
 }
@@ -110,7 +119,7 @@ func (e *localEngine) Play(move game.Move) error {
 	newState := e.state.Play(move).(*game.GameState)
 	e.state = newState
 
-	// Check if game is over after this move //TODO DONT CONSUME! Change this
+	// Check if game is over after this move
 	if isGameOver(e.state.(*game.GameState)) {
 		e.gameOver = true
 		// Send final update then close
