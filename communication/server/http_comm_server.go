@@ -3,28 +3,27 @@ package server
 import (
 	"encoding/json"
 	"net/http"
-	"risk/communication"
 	"risk/game"
 	"sync"
 )
 
 type ServerCommunicator struct {
 	gameState *game.GameState
-	actions   chan communication.Action
+	actions   chan game.Action
 	mutex     sync.RWMutex
 }
 
 // NewServerCommunicator initializes and returns a new ServerCommunicator.
-func NewServerCommunicator(initialState *game.GameState) *ServerCommunicator {
+func NewServerCommunicator() *ServerCommunicator {
 	sc := &ServerCommunicator{
-		gameState: initialState,
-		actions:   make(chan communication.Action, 100),
+		gameState: nil, // Initialize to nil asGameMaster will set it
+		actions:   make(chan game.Action, 100),
 	}
-	go sc.startServer()
 	return sc
 }
 
-func (sc *ServerCommunicator) startServer() {
+// StartServer starts the HTTP server.
+func (sc *ServerCommunicator) Start() {
 	http.HandleFunc("/getGameState", sc.handleGetGameState)
 	http.HandleFunc("/updateGameState", sc.handleUpdateGameState)
 	http.HandleFunc("/sendAction", sc.handleSendAction)
@@ -35,6 +34,10 @@ func (sc *ServerCommunicator) startServer() {
 func (sc *ServerCommunicator) handleGetGameState(w http.ResponseWriter, r *http.Request) {
 	sc.mutex.RLock()
 	defer sc.mutex.RUnlock()
+	if sc.gameState == nil {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
 	json.NewEncoder(w).Encode(sc.gameState)
 }
 
@@ -48,7 +51,7 @@ func (sc *ServerCommunicator) handleUpdateGameState(w http.ResponseWriter, r *ht
 }
 
 func (sc *ServerCommunicator) handleSendAction(w http.ResponseWriter, r *http.Request) {
-	var action communication.Action
+	var action game.Action
 	json.NewDecoder(r.Body).Decode(&action)
 	sc.actions <- action
 	w.WriteHeader(http.StatusOK)
@@ -66,6 +69,9 @@ func (sc *ServerCommunicator) handleReceiveAction(w http.ResponseWriter, r *http
 func (sc *ServerCommunicator) GetGameState() *game.GameState {
 	sc.mutex.RLock()
 	defer sc.mutex.RUnlock()
+	if sc.gameState == nil {
+		return nil
+	}
 	return sc.gameState.Copy()
 }
 
@@ -75,10 +81,10 @@ func (sc *ServerCommunicator) UpdateGameState(gs *game.GameState) {
 	sc.gameState = gs
 }
 
-func (sc *ServerCommunicator) SendAction(action communication.Action) {
+func (sc *ServerCommunicator) SendAction(action game.Action) {
 	sc.actions <- action
 }
 
-func (sc *ServerCommunicator) ReceiveAction() communication.Action {
+func (sc *ServerCommunicator) ReceiveAction() game.Action {
 	return <-sc.actions
 }

@@ -18,7 +18,7 @@ func main2() {
 
 	// TODO: either by iterations or by duration
 	mcts := searcher.NewMCTS(searcher.WithGoroutines(*numGoroutines), searcher.WithIterations(*numIterations), searcher.WithDuration(*duration))
-	engine := gamemaster.NewLocalEngine() // TODO: handle multiple players
+	engine := gamemaster.GetLocalEngine()
 
 	controller := agent.NewTrainingController(*player, mcts, engine)
 	controller.Run()
