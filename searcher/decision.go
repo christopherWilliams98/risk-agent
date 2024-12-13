@@ -10,87 +10,109 @@ type decision struct {
 	sync.RWMutex
 	parent   Node
 	player   string
-	moves    []game.Move
-	children []Node
-	delta    map[string]any
+	moves    []game.Move        // Unexplored
+	children map[game.Move]Node // Explored
+	hash     game.StateHash
 	rewards  float64
 	visits   int
 }
 
 func newDecision(parent Node, state game.State) *decision {
 	// TODO: randomize moves
+	// TODO: prioritize 'pass' moves (in attack and maneuver phases)
 	moves := state.LegalMoves()
 
-	var delta map[string]any
+	// Lazily compute state ID
+	var hash game.StateHash
 	if _, ok := parent.(*chance); ok {
-		delta = state.Delta()
+		hash = state.Hash()
 	}
 
 	return &decision{
 		parent:   parent,
 		player:   state.Player(),
 		moves:    moves,
-		children: make([]Node, 0, len(moves)),
-		delta:    delta,
+		children: make(map[game.Move]Node, len(moves)),
+		hash:     hash,
 		rewards:  0,
 		visits:   0,
 	}
 }
 
-func (d *decision) PickChild(state game.State) (Node, game.State, bool) {
+// SelectOrExpand
+// - if fully expanded, select a child node based on the selection policy
+// - if not fully expanded, expand the node by adding a child node for an unexplored move
+// - in both cases, advance the state by playing the move to the child node
+// - if terminal, simply return the node itself with the state unchanged
+func (d *decision) SelectOrExpand(state game.State) (Node, game.State, bool) {
 	d.Lock()
 	defer d.Unlock()
 
-	if len(d.moves) == 0 { // Terminal node
+	if len(d.moves) == 0 && len(d.children) == 0 { // Terminal Node
 		return d, state, false
 	}
 
-	if len(d.moves) > len(d.children) { // Expandable node
-		child, state := d.addChild(state)
-		child.applyLoss()
-		return child, state, true
-	}
-
-	// Fully expanded node
-	ith := d.pickChild()
-	child := d.children[ith]
-	move := d.moves[ith]
-	child.applyLoss()
-	return child, state.Play(move), false
-}
-
-func (d *decision) addChild(state game.State) (Node, game.State) {
-	move := d.moves[len(d.children)]
 	var child Node
-	if move.IsDeterministic() {
-		child = newDecision(d, state)
-	} else {
-		child = newChance(d, state)
+	selected := false
+	if len(d.moves) > 0 { // Expand Node with an unexplored move
+		child, state = d.expands(state)
+	} else { // Select a child of fully expanded Node
+		child, state = d.selects(state)
+		selected = true
 	}
-	d.children = append(d.children, child)
-	return child, state.Play(move)
+
+	child.applyLoss()
+	return child, state, selected
 }
 
-func (d *decision) pickChild() int {
+func (d *decision) expands(state game.State) (Node, game.State) {
+	move := d.moves[0]
+	// TODO: copy state or pass arg by value?
+	state = state.Play(move)
+
+	var child Node
+	if move.IsStochastic() {
+		child = newChance(d)
+	} else {
+		child = newDecision(d, state)
+	}
+
+	d.children[move] = child
+	d.moves = d.moves[1:]
+	return child, state
+}
+
+func (d *decision) selects(state game.State) (Node, game.State) {
+	if len(d.children) == 0 {
+		panic("no children")
+	}
+
 	if d.visits == 0 {
-		panic("node has children but no visits")
+		panic("unexplored parent node (0 visits)")
 	}
 
-	normalizer := C_SQUARED * math.Log(float64(d.visits))
-
-	maxIndex := -1
-	maxScore := math.Inf(-1)
-	for i, child := range d.children {
-		score := child.score(normalizer)
-		if score == math.Inf(1) {
-			return i
+	// TODO: potentially parallelize selection policy computation on child
+	//  nodes (large branching factor, many children, O(N) complexity)
+	policy := newUCT(C_SQUARED, d.visits)
+	maxValue := math.Inf(-1)
+	var maxMove game.Move
+	for move, child := range d.children {
+		player, rewards, visits := child.stats()
+		if visits == 0 {
+			panic("unexplored child node (0 visits)")
 		}
-		if score > maxScore {
-			maxScore = score
-			maxIndex = i
+		// Maximize current player's rewards or minimize opponent's rewards
+		if player != d.player { // Turn changes
+			rewards = -rewards // Negate opponent's rewards
+		}
+		value := policy.evaluate(rewards, visits)
+		if value > maxValue {
+			maxValue = value
+			maxMove = move
 		}
 	}
-	return maxIndex
+	// TODO: copy state or pass arg by value?
+	return d.children[maxMove], state.Play(maxMove)
 }
 
 func (d *decision) applyLoss() {
@@ -101,44 +123,35 @@ func (d *decision) applyLoss() {
 	d.visits++
 }
 
-func (d *decision) score(normalizer float64) float64 {
+func (d *decision) stats() (player string, rewards float64, visits int) {
 	d.RLock()
 	defer d.RUnlock()
 
-	return ucb1(d.rewards, d.visits, normalizer)
+	return d.player, d.rewards, d.visits
 }
 
-func (d *decision) Update(rewarder func(string) float64) Node {
+func (d *decision) Backup(winner string) Node {
 	d.Lock()
 	defer d.Unlock()
 
-	// Reverse virtual loss except for root node
-	if d.parent != nil {
-		d.rewards -= LOSS
-		d.visits--
+	if d.parent != nil { // Virtual loss is not applied on root Node
+		d.reverseLoss()
 	}
 
-	d.rewards += rewarder(d.player)
+	d.rewards += computeReward(winner, d.player)
 	d.visits++
 
 	return d.parent
 }
 
-func (d *decision) Value() int {
+func (d *decision) reverseLoss() {
+	d.rewards -= LOSS
+	d.visits--
+}
+
+func (d *decision) Visits() int {
 	d.RLock()
 	defer d.RUnlock()
 
 	return d.visits
-}
-
-func (d *decision) findBestMove() game.Move {
-	bestIndex := -1
-	maxValue := -1
-	for i, child := range d.children {
-		if child.Value() > maxValue {
-			maxValue = child.Value()
-			bestIndex = i
-		}
-	}
-	return d.moves[bestIndex]
 }

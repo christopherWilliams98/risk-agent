@@ -59,60 +59,22 @@ func (gm *GameMaster) RunGame() {
 			continue
 		}
 
-		// Depending on the phase, handle actions
-		switch gs.Phase {
-		case game.InitialPlacementPhase:
-			// Players take turns placing their initial troops
-			gm.handleInitialPlacement(gs)
-		default:
-			// Regular gameplay
-			action := gm.Communicator.ReceiveAction()
+		// For all phases, do the same steps now:
+		action := gm.Communicator.ReceiveAction()
 
-			// Validate that the action is from the correct player
-			if action.PlayerID != gs.CurrentPlayer {
-				// Handle invalid action
-				// Security: how do we make sure that it really is the right player
-				// websocket Look into it later! (low priority)
-				continue
-			}
-
-			// Apply the action
-			newGs := gs.Play(&game.GameMove{
-				ActionType:   action.Type,
-				FromCantonID: action.FromCantonID,
-				ToCantonID:   action.ToCantonID,
-				NumTroops:    action.NumTroops,
-			}).(*game.GameState)
-
-			// Update the global game state
-			gm.Communicator.UpdateGameState(newGs)
+		if action.PlayerID != gs.CurrentPlayer {
+			continue
 		}
+
+		newGs := gs.Play(&game.GameMove{
+			ActionType:   action.Type,
+			FromCantonID: action.FromCantonID,
+			ToCantonID:   action.ToCantonID,
+			NumTroops:    action.NumTroops,
+		}).(*game.GameState)
+
+		gm.Communicator.UpdateGameState(newGs)
 	}
-}
-
-func (gm *GameMaster) handleInitialPlacement(gs *game.GameState) {
-	// Receive action from the current player
-	action := gm.Communicator.ReceiveAction()
-
-	// Validate action
-	if action.Type != game.ReinforceAction || action.PlayerID != gs.CurrentPlayer {
-		// Handle invalid action
-		return
-	}
-
-	// Apply the action
-	gs.TroopCounts[action.ToCantonID] += action.NumTroops
-	gs.PlayerTroops[gs.CurrentPlayer] -= action.NumTroops
-
-	// Check if the player has finished placing troops
-	if gs.PlayerTroops[gs.CurrentPlayer] == 0 {
-		gs.AdvancePhase()
-	} else {
-		// Switch to the next player
-		gs.CurrentPlayer = gs.NextPlayer()
-	}
-
-	gm.Communicator.UpdateGameState(gs)
 }
 
 // CheckGameOver determines if the game has ended.

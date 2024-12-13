@@ -20,15 +20,20 @@ const (
 
 // GameState represents the dynamic state of the game at any point. stuff that will change during the game, (everything except the map - which is static), and at some point even the rules.
 type GameState struct {
-	Map           *Map        // Reference to the static game map
-	TroopCounts   []int       // Troop counts per canton, indexed by canton ID
-	Ownership     []int       // Owner IDs per canton, indexed by canton ID (-1 indicates unowned)
-	Rules         Rules       // The set of game rules to apply
-	CurrentPlayer int         // The current player
-	LastMove      Move        // The last move made (for delta)
-	Phase         Phase       // The current phase of the game
-	PlayerTroops  map[int]int // Troops remaining for initial placement per player
-	TroopsToPlace int         // Troops to place during reinforcement phase
+	Map               *Map         // Reference to the static game map
+	TroopCounts       []int        // Troop counts per canton, indexed by canton ID
+	Ownership         []int        // Owner IDs per canton, indexed by canton ID (-1 indicates unowned)
+	Rules             Rules        // The set of game rules to apply
+	CurrentPlayer     int          // The current player
+	LastMove          Move         // The last move made (for delta)
+	Phase             Phase        // The current phase of the game
+	PlayerTroops      map[int]int  // Troops remaining for initial placement per player
+	TroopsToPlace     int          // Troops to place during reinforcement phase
+	Cards             []RiskCard   // Card deck
+	DiscardedCards    []RiskCard   // Discarded cards
+	PlayerHands       [][]RiskCard // Player hands
+	Exchanges         int          // Number of exchanges
+	ConqueredThisTurn bool         // Whether a territory was conquered this turn
 }
 
 // NewGameState initializes and returns a new GameState.
@@ -40,10 +45,16 @@ func NewGameState(m *Map, rules Rules) *GameState {
 		Ownership:   make([]int, numCantons),
 		Rules:       rules,
 	}
-	// Initialize all cantons as unowned (-1)
+	// Initialize all cantons unowned (-1)
 	for i := range gs.Ownership {
 		gs.Ownership[i] = -1
 	}
+	gs.InitCards()
+
+	gs.PlayerHands = make([][]RiskCard, 3) // 2player
+	gs.PlayerHands[1] = []RiskCard{}
+	gs.PlayerHands[2] = []RiskCard{}
+
 	return gs
 }
 
@@ -64,21 +75,225 @@ func (gs *GameState) Copy() *GameState {
 	}
 
 	return &GameState{
-		Map:           gs.Map,
-		TroopCounts:   troopCountsCopy,
-		Ownership:     ownershipCopy,
-		Rules:         gs.Rules,
-		CurrentPlayer: gs.CurrentPlayer,
-		LastMove:      gs.LastMove,
-		Phase:         gs.Phase,
-		PlayerTroops:  playerTroopsCopy,
-		TroopsToPlace: gs.TroopsToPlace,
+		Map:               gs.Map,
+		TroopCounts:       troopCountsCopy,
+		Ownership:         ownershipCopy,
+		Rules:             gs.Rules,
+		CurrentPlayer:     gs.CurrentPlayer,
+		LastMove:          gs.LastMove,
+		Phase:             gs.Phase,
+		PlayerTroops:      playerTroopsCopy,
+		TroopsToPlace:     gs.TroopsToPlace,
+		Cards:             gs.Cards,
+		DiscardedCards:    gs.DiscardedCards,
+		PlayerHands:       gs.PlayerHands,
+		Exchanges:         gs.Exchanges,
+		ConqueredThisTurn: gs.ConqueredThisTurn,
+	}
+}
+
+func (gs *GameState) InitCards() {
+	types := []CardType{Infantry, Cavalry, Artillery}
+	tIndex := 0
+	for i := 0; i < 24; i++ {
+		gs.Cards = append(gs.Cards, RiskCard{Type: types[i%3], TerritoryID: i})
+		tIndex++
+	}
+	// 2 Wild cards
+	gs.Cards = append(gs.Cards, RiskCard{Type: Wild, TerritoryID: -1})
+	gs.Cards = append(gs.Cards, RiskCard{Type: Wild, TerritoryID: -1})
+
+	// Shuffle the deck
+	rand.Shuffle(len(gs.Cards), func(i, j int) {
+		gs.Cards[i], gs.Cards[j] = gs.Cards[j], gs.Cards[i]
+	})
+}
+
+func (gs *GameState) DrawCard() (RiskCard, bool) {
+	if len(gs.Cards) == 0 {
+		// If no cards left, reshuffle discarded into deck
+		if len(gs.DiscardedCards) == 0 {
+			// No cards at all
+			return RiskCard{}, false
+		}
+		gs.Cards = append(gs.Cards, gs.DiscardedCards...)
+		gs.DiscardedCards = nil
+		rand.Shuffle(len(gs.Cards), func(i, j int) {
+			gs.Cards[i], gs.Cards[j] = gs.Cards[j], gs.Cards[i]
+		})
+	}
+	card := gs.Cards[0]
+	gs.Cards = gs.Cards[1:]
+	return card, true
+}
+
+func (gs *GameState) AwardCardIfEligible() {
+	if gs.ConqueredThisTurn {
+		card, ok := gs.DrawCard()
+		if ok {
+			gs.PlayerHands[gs.CurrentPlayer] = append(gs.PlayerHands[gs.CurrentPlayer], card)
+		}
+	}
+	gs.ConqueredThisTurn = false // Reset for next turn
+}
+
+func (gs *GameState) HandleCardTrading() {
+	playerID := gs.CurrentPlayer
+	hand := gs.PlayerHands[playerID]
+
+	// If player has 5 or more cards, they MUST trade in.
+	// Otherwise, they may (but we are implementing a must trade sets if available logic)
+	for {
+		if len(hand) < 3 {
+			break
+		}
+		set := gs.FindSet(hand)
+		if set == nil {
+			break
+		}
+		hand = gs.TradeInSet(hand, set)
+	}
+	gs.PlayerHands[playerID] = hand
+}
+
+// Find a set of cards in the player's hand. We return the indices of the chosen set.
+// Sets:
+// 1) Three of a kind (Infantry, Infantry, Infantry OR Cavalry, Cavalry, Cavalry OR Artillery, Artillery, Artillery)
+// 2) One of each (Infantry, Cavalry, Artillery)
+// 3) Any two plus a Wild
+func (gs *GameState) FindSet(hand []RiskCard) []int {
+	n := len(hand)
+	// Count types
+	countType := map[CardType][]int{} // type -> indices
+	for i, c := range hand {
+		countType[c.Type] = append(countType[c.Type], i)
+	}
+
+	// Check three of a kind
+	for t, indices := range countType {
+		if t != Wild && len(indices) >= 3 {
+			return indices[:3]
+		}
+	}
+
+	// Check one of each (Inf, Cav, Art)
+	inf, cav, art := countType[Infantry], countType[Cavalry], countType[Artillery]
+	if len(inf) > 0 && len(cav) > 0 && len(art) > 0 {
+		// Take the first one of each
+		return []int{inf[0], cav[0], art[0]}
+	}
+
+	// Check two plus a wild
+	wilds := countType[Wild]
+	if len(wilds) > 0 {
+		// Try to find any two of the other types
+		otherTypes := []CardType{Infantry, Cavalry, Artillery}
+		for _, t := range otherTypes {
+			if len(countType[t]) >= 2 {
+				return []int{countType[t][0], countType[t][1], wilds[0]}
+			}
+		}
+		// Or one of one type and one of another type plus wild
+		var nonWildIndices []int
+		for i := 0; i < n; i++ {
+			if hand[i].Type != Wild {
+				nonWildIndices = append(nonWildIndices, i)
+			}
+		}
+		if len(nonWildIndices) >= 2 {
+			return []int{nonWildIndices[0], nonWildIndices[1], wilds[0]}
+		}
+	}
+
+	// No set found
+	return nil
+}
+
+// Trade in a given set of cards, remove from hand, put into discard, increment gs.Exchanges, and give armies.
+func (gs *GameState) TradeInSet(hand []RiskCard, setIndices []int) []RiskCard {
+	playerID := gs.CurrentPlayer
+	// Extract the cards
+	var set []RiskCard
+	sort.Sort(sort.Reverse(sort.IntSlice(setIndices)))
+	for _, idx := range setIndices {
+		set = append(set, hand[idx])
+		hand = append(hand[:idx], hand[idx+1:]...)
+	}
+
+	// Move set to discarded
+	gs.DiscardedCards = append(gs.DiscardedCards, set...)
+
+	// Increment exchanges count (global)
+	gs.Exchanges++
+
+	// Calculate how many armies
+	armiesFromSet := gs.ArmiesForThisExchange(gs.Exchanges)
+	gs.TroopsToPlace += armiesFromSet
+
+	// Check territory bonus
+	extraArmiesGranted := 0
+	for _, card := range set {
+		if card.TerritoryID >= 0 && gs.Ownership[card.TerritoryID] == playerID && extraArmiesGranted < 2 {
+			// Place 2 extra armies on this territory
+			gs.TroopCounts[card.TerritoryID] += 2
+			extraArmiesGranted += 2
+		}
+		if extraArmiesGranted == 2 {
+			break
+		}
+	}
+
+	return hand
+}
+
+// ArmiesForThisExchange calculates how many armies to award given the nth exchange. //TODO REFACTOR IN METADATA / RULES
+// The first set traded in - 4 armies
+// The second set - 6 armies
+// The third set - 8 armies
+// The fourth set - 10 armies
+// The fifth set - 12 armies
+// The sixth set - 15 armies
+// After the sixth set, each additional set is worth 5 more than the previous.
+func (gs *GameState) ArmiesForThisExchange(exchangeNumber int) int {
+
+	switch exchangeNumber {
+	case 1:
+		return 4
+	case 2:
+		return 6
+	case 3:
+		return 8
+	case 4:
+		return 10
+	case 5:
+		return 12
+	case 6:
+		return 15
+	default:
+		// After sixth, it's 15 + 5*(exchangeNumber-6)
+		return 15 + 5*(exchangeNumber-6)
 	}
 }
 
 // LegalMoves returns all legal moves for the current player.
-func (gs *GameState) LegalMoves() []Move {
+func (gs GameState) LegalMoves() []Move {
 	switch gs.Phase {
+	case InitialPlacementPhase:
+		// Generate legal initial placement moves
+		moves := []Move{}
+		if gs.PlayerTroops[gs.CurrentPlayer] > 0 {
+			// Player can place 1 troop on any territory they own // TODO change to mutable value in rules / meta file
+			for cid, owner := range gs.Ownership {
+				if owner == gs.CurrentPlayer {
+					moves = append(moves, &GameMove{
+						ActionType: ReinforceAction,
+						ToCantonID: cid,
+						NumTroops:  1,
+					})
+				}
+			} // TODO REFACTOR THIS
+		}
+		return moves
 	case ReinforcementPhase:
 		return gs.reinforcementMoves()
 	case AttackPhase:
@@ -270,9 +485,11 @@ func (gs *GameState) Attack(attackerID, defenderID int) error {
 		moveTroops := gs.TroopCounts[attackerID] - 1 // Move all but one troop
 		gs.TroopCounts[attackerID] -= moveTroops
 		gs.TroopCounts[defenderID] = moveTroops
+		gs.ConqueredThisTurn = true
 	} else {
 		// Defender survives
 		gs.TroopCounts[defenderID] = defenderTroops
+		gs.ConqueredThisTurn = false
 	}
 
 	return nil
@@ -309,7 +526,7 @@ func (gs *GameState) AreAdjacent(cantonID1, cantonID2 int) bool {
 	return false
 }
 
-func (gs *GameState) Delta() uint64 {
+func (gs *GameState) Hash() uint64 {
 	hasher := fnv.New64a()
 
 	// Hash current player
@@ -377,6 +594,40 @@ func (gs *GameState) Play(move Move) State {
 	gameMove := move.(*GameMove)
 
 	switch gs.Phase {
+
+	case InitialPlacementPhase:
+		if gameMove.ActionType == ReinforceAction {
+			// Place the troops
+			newGs.TroopCounts[gameMove.ToCantonID] += gameMove.NumTroops
+			newGs.PlayerTroops[newGs.CurrentPlayer] -= gameMove.NumTroops
+
+			// Check if the current player has finished placing all their initial troops
+			if newGs.PlayerTroops[newGs.CurrentPlayer] == 0 {
+				// Check if all players have finished placing their initial troops
+				allDone := true
+				for _, troops := range newGs.PlayerTroops {
+					if troops > 0 {
+						allDone = false
+						break
+					}
+				}
+				if allDone {
+					// All players done with initial placement
+					// Move to the ReinforcementPhase
+					newGs.Phase = ReinforcementPhase
+					newGs.calculateTroopsToPlace()
+				} else {
+					// Not all done, move to the next player who still has troops left
+					newGs.CurrentPlayer = newGs.NextPlayer()
+				}
+			} else {
+
+				newGs.CurrentPlayer = newGs.NextPlayer()
+			}
+		} else {
+			panic("Invalid action for InitialPlacementPhase")
+		}
+
 	case ReinforcementPhase:
 		if gameMove.ActionType == ReinforceAction {
 			// Apply reinforcement move
@@ -444,6 +695,7 @@ func (gs *GameState) AdvancePhase() {
 		gs.CurrentPlayer = gs.NextPlayer()
 		if gs.PlayerTroops[1] == 0 && gs.PlayerTroops[2] == 0 {
 			gs.Phase = ReinforcementPhase
+			gs.HandleCardTrading()
 			gs.calculateTroopsToPlace()
 		}
 	case ReinforcementPhase:
@@ -451,8 +703,10 @@ func (gs *GameState) AdvancePhase() {
 	case AttackPhase:
 		gs.Phase = ManeuverPhase
 	case ManeuverPhase:
+		gs.AwardCardIfEligible()
 		gs.Phase = ReinforcementPhase
 		gs.CurrentPlayer = gs.NextPlayer()
+		gs.HandleCardTrading()
 		gs.calculateTroopsToPlace()
 	}
 }
@@ -505,7 +759,6 @@ func (gs *GameState) calculateTroopsToPlace() {
 	gs.TroopsToPlace = troops
 }
 
-// we could add more players to the game, 2 players now for simplicity
 func (gs *GameState) NextPlayer() int {
 	if gs.CurrentPlayer == 1 {
 		return 2
