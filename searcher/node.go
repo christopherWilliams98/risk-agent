@@ -7,6 +7,7 @@ import (
 type Node interface {
 	SelectOrExpand(state game.State) (child Node, childState game.State, selected bool)
 	Backup(winner string) Node
+	Policy() map[game.Move]int
 	stats() (player string, rewards float64, visits int)
 	applyLoss()
 }

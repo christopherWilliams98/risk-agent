@@ -8,6 +8,7 @@ type Move interface {
 
 type StateHash uint64
 
+// State should be immutable - operations on State always return a new copy
 type State interface {
 	Player() string
 	LegalMoves() []Move

@@ -149,9 +149,14 @@ func (d *decision) reverseLoss() {
 	d.visits--
 }
 
-func (d *decision) Visits() int {
+func (d *decision) Policy() map[game.Move]int {
 	d.RLock()
 	defer d.RUnlock()
 
-	return d.visits
+	visits := make(map[game.Move]int, len(d.children))
+	for move, child := range d.children {
+		_, _, visits[move] = child.stats()
+	}
+
+	return visits
 }

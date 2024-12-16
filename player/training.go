@@ -31,9 +31,9 @@ func (l trainingController) Run() {
 	updates := []searcher.Segment{}
 	for {
 		if state.Player() == l.player {
-			visits := l.mcts.RunSimulations(state, updates)
+			visits := l.mcts.Simulate(state, updates)
 			// TODO: apply a temperature schedule as training progresses
-			policy := computePolicy(visits, 1.0)
+			policy := adjustTemperature(visits, 1.0)
 			move := sample(policy)
 			// TODO: propagate error
 			err := l.engine.Play(move)
@@ -48,7 +48,7 @@ func (l trainingController) Run() {
 	}
 }
 
-func computePolicy(visits map[game.Move]int, temperature float64) map[game.Move]float64 {
+func adjustTemperature(visits map[game.Move]int, temperature float64) map[game.Move]float64 {
 	// Compute temperature-adjusted move probabilities
 	exponent := 1.0 / temperature
 	sum := 0.0

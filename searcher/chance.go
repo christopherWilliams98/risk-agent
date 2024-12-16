@@ -88,9 +88,7 @@ func (c *chance) reverseLoss() {
 	c.visits--
 }
 
-func (c *chance) Visits() int {
-	c.RLock()
-	defer c.RUnlock()
-
-	return c.visits
+func (c *chance) Policy() map[game.Move]int {
+	// Chance nodes do not have a policy (stochastic outcomes)
+	return nil
 }
