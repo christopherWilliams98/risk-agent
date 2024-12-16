@@ -8,7 +8,7 @@ import (
 	"sync"
 )
 
-func main() {
+func main2() {
 	// Initialize the ServerCommunicator
 	serverComm := server.NewServerCommunicator()
 	go serverComm.Start()

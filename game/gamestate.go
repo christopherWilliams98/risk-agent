@@ -51,7 +51,7 @@ func NewGameState(m *Map, rules Rules) *GameState {
 		gs.Ownership[i] = -1
 	}
 	gs.InitCards()
-
+	gs.CurrentPlayer = 1
 	gs.PlayerHands = make([][]RiskCard, 3) // 2player
 	gs.PlayerHands[1] = []RiskCard{}
 	gs.PlayerHands[2] = []RiskCard{}
@@ -787,11 +787,11 @@ func (gs *GameState) NextPlayer() int {
 }
 
 // gets the winner of the game
-func (gs *GameState) Winner() string {
+func (gs GameState) Winner() string {
 	return gs.Won
 }
 
-func (gs *GameState) CheckWinner() string {
+func (gs GameState) CheckWinner() string {
 	// Count how many territories each player owns
 	playerTerritories := make(map[int]int)
 	for _, owner := range gs.Ownership {
@@ -809,4 +809,14 @@ func (gs *GameState) CheckWinner() string {
 
 	// otherwise return empty string
 	return ""
+}
+
+// assigning `troopsPerTerritory` troops to each territory.
+func (gs *GameState) AssignTerritoriesEqually(numPlayers, troopsPerTerritory int) {
+	totalTerritories := len(gs.Map.Cantons)
+	for id := 0; id < totalTerritories; id++ {
+		playerID := (id % numPlayers) + 1 // 1,2,1,2,...
+		gs.Ownership[id] = playerID
+		gs.TroopCounts[id] = troopsPerTerritory
+	}
 }
