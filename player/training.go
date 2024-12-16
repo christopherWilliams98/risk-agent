@@ -31,6 +31,7 @@ func (l trainingController) Run() {
 	updates := []searcher.Segment{}
 	for {
 		if state.Player() == l.player {
+			// TODO: returns a policy by visit counts, rename this variable
 			visits := l.mcts.Simulate(state, updates)
 			// TODO: apply a temperature schedule as training progresses
 			policy := adjustTemperature(visits, 1.0)

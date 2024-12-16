@@ -2,6 +2,14 @@ package searcher
 
 import "math"
 
+// Hyperparameters for MCTS
+const C_SQUARED = 2.0
+
+// Rewards accumulate simulation outcomes to estimate the expected outcome
+const WIN = 1.0
+const LOSS = -WIN // Negate for opponent's outcome
+// TODO: update applyLoss() and tests accordingly
+
 type uct struct {
 	numerator float64
 }
