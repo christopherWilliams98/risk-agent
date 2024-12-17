@@ -1,25 +1,32 @@
 package main
 
 import (
-	"flag"
+	"fmt"
+	"risk/game"
 	"risk/gamemaster"
-	agent "risk/player"
-	"risk/searcher"
-	"time"
 )
 
-func main2() {
+func main() {
 
-	player := flag.String("player", "", "Player's name")
-	numGoroutines := flag.Int("goroutines", 2, "Number of goroutines for parallel playouts")
-	numIterations := flag.Int("iterations", 200, "Number of playouts per move")
-	duration := flag.Duration("duration", time.Second*10, "Duration of playouts per move")
-	flag.Parse()
+	// Create the map
+	gameMap := game.CreateMap()
 
-	// TODO: either by iterations or by duration
-	mcts := searcher.NewMCTS(searcher.WithGoroutines(*numGoroutines), searcher.WithIterations(*numIterations), searcher.WithDuration(*duration))
-	engine := gamemaster.NewLocalEngine() // TODO: handle multiple players
+	// Create standard rules
+	rules := game.NewStandardRules()
 
-	controller := agent.NewTrainingController(*player, mcts, engine)
-	controller.Run()
+	// Create the agents
+	agents := []gamemaster.Agent{
+		gamemaster.NewMCTSAgent(1),
+		gamemaster.NewMCTSAgent(2),
+	}
+
+	// Instantiate engine
+	players := []string{"Player1", "Player2"}
+	engine := gamemaster.LocalEngine(players, agents, gameMap, rules)
+
+	// Run the game
+	engine.Run()
+
+	winner := engine.State.Winner()
+	fmt.Printf("Game over! Winner: %s\n", winner)
 }

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"net/http"
-	"risk/communication"
 	"risk/game"
 )
 
@@ -35,18 +34,18 @@ func (cc *ClientCommunicator) UpdateGameState(gs *game.GameState) {
 	http.Post(cc.serverURL+"/updateGameState", "application/json", bytes.NewBuffer(data))
 }
 
-func (cc *ClientCommunicator) SendAction(action communication.Action) {
+func (cc *ClientCommunicator) SendAction(action game.Action) {
 	data, _ := json.Marshal(action)
 	http.Post(cc.serverURL+"/sendAction", "application/json", bytes.NewBuffer(data))
 }
 
-func (cc *ClientCommunicator) ReceiveAction() communication.Action {
+func (cc *ClientCommunicator) ReceiveAction() game.Action {
 	resp, err := http.Get(cc.serverURL + "/receiveAction")
 	if err != nil || resp.StatusCode != http.StatusOK {
-		return communication.Action{}
+		return game.Action{}
 	}
 	defer resp.Body.Close()
-	var action communication.Action
+	var action game.Action
 	json.NewDecoder(resp.Body).Decode(&action)
 	return action
 }

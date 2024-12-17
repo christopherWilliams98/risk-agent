@@ -1,55 +1,91 @@
-package gamemaster // TODO: rename to engine
+package gamemaster
 
 import (
 	"risk/game"
 )
 
-type UpdateGetter func() (game.Move, game.State)
-
-type Engine interface {
-	Init() (game.State, UpdateGetter)
-	Play(game.Move) error
+type Engine struct {
+	State  *game.GameState
+	Agents []Agent
 }
 
-type update struct {
-	move  game.Move
-	state game.State
+type Update struct {
+	Move game.Move
+	Hash game.StateHash
 }
 
-type localEngine struct {
-	state    game.State
-	updateCh chan update
+func LocalEngine(players []string, agents []Agent, m *game.Map, r game.Rules) *Engine {
+	if len(players) != len(agents) {
+		panic("number of players does not match number of agents")
+	}
+	if len(players) < 2 {
+		panic("need at least two players")
+	}
+
+	state := game.NewGameState(m, r)
+
+	// For a 2-player game, numPlayers=2, troopsPerTerritory=1
+	state.AssignTerritoriesEqually(len(players), 1)
+
+	state.PlayerTroops = map[int]int{
+		1: 27, // leftover troops for Player1
+		2: 27, // "" for Player2 ""
+	}
+
+	state.Phase = game.InitialPlacementPhase
+	state.CurrentPlayer = 1
+
+	eng := &Engine{
+		State:  state,
+		Agents: agents,
+	}
+	return eng
 }
 
-// TODO: single instance for all players => use factory pattern?
-func NewLocalEngine() *localEngine {
-	return &localEngine{}
-}
+// Run executes the entire game loop until a winner is found.
+func (e *Engine) Run() {
 
-// TODO: remote engine should also satisfy this interface
-func (e *localEngine) Init() (game.State, UpdateGetter) {
-	// TODO: initialize the game state and board positions for 1 out of N total players
-	// TODO: make sure a state value is returned, NOT a pointer (or return a copy)
-	// e.state =
+	updates := make([][]Update, len(e.Agents))
+	for i := range updates {
+		updates[i] = []Update{}
+	}
 
-	e.updateCh = make(chan update, 1) // TODO: buffer size?
-	// TODO: return a copy of the state or dereferenced value
-	return e.state, func() (game.Move, game.State) {
-		u, ok := <-e.updateCh
-		if !ok { // Game over
-			return nil, nil
+	// while Loop until there's a winner
+	for e.State.Winner() == "" {
+		currentPlayerID := e.State.CurrentPlayer
+		agentIndex := currentPlayerID - 1
+
+		move := e.Agents[agentIndex].FindMove(e.State, updates[agentIndex])
+
+		newState := e.State.Play(move).(*game.GameState)
+
+		u := Update{
+			Move: move,
+			Hash: newState.Hash(),
 		}
-		// TODO: return a copy of the state or dereferenced value
-		return u.move, u.state
+		updates[agentIndex] = append(updates[agentIndex], u)
+
+		e.State = newState
 	}
 }
 
-// TODO: remote engine should also satisfy this interface
-func (e *localEngine) Play(move game.Move) error {
-	// TODO: throw error if move is not legal or game is over, etc
-	e.state = e.state.Play(move) // TODO: encompass move validation
-	// TODO: propagate error
+type Agent interface {
+	FindMove(state *game.GameState, recentUpdates []Update) game.Move
+}
 
-	e.updateCh <- update{move: move, state: e.state}
-	return nil
+type MCTSAgent struct {
+	PlayerID int
+}
+
+func NewMCTSAgent(playerID int) *MCTSAgent {
+	return &MCTSAgent{PlayerID: playerID}
+}
+
+// simple implementation - always returns first legal move
+func (mcts *MCTSAgent) FindMove(state *game.GameState, recentUpdates []Update) game.Move {
+	legalMoves := state.LegalMoves()
+	if len(legalMoves) == 0 {
+		panic("No legal moves available - agent stuck")
+	}
+	return legalMoves[0]
 }
