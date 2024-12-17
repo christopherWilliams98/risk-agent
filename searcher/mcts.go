@@ -45,7 +45,7 @@ func NewMCTS(goroutines int, options ...Option) *MCTS {
 	return u
 }
 
-func (m *MCTS) Simulate(state game.State, lineage []Segment) map[game.Move]int {
+func (m *MCTS) Simulate(state game.State, lineage []Segment) map[game.Move]float64 {
 	// Reuse subtree if possible
 	m.root = m.findSubtree(lineage, state)
 	// Run simulations to collect statistics

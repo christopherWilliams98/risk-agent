@@ -9,8 +9,8 @@ type Node interface {
 	// Backup accumulates the reward from the simulation outcome to estimate the
 	// expected game outcome from this node
 	Backup(winner string) Node
-	Policy() map[game.Move]int
-	stats() (player string, rewards float64, visits int)
+	Policy() map[game.Move]float64
+	stats() (player string, rewards float64, visits float64)
 	applyLoss()
 }
 

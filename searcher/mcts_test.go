@@ -85,7 +85,7 @@ func TestSimulate(t *testing.T) {
 				},
 			},
 		}
-		require.Equal(t, map[game.Move]int{move1: 1}, got, "Should explore M1 once")
+		require.Equal(t, map[game.Move]float64{move1: 1}, got, "Should explore M1 once")
 		requireTreeEqual(t, expectedRoot, mcts.root.(*decision))
 	})
 
@@ -112,7 +112,7 @@ func TestSimulate(t *testing.T) {
 				},
 			},
 		}
-		require.Equal(t, map[game.Move]int{move1: 1, move2: 1}, got, "Should explore M1 and M2 each once")
+		require.Equal(t, map[game.Move]float64{move1: 1, move2: 1}, got, "Should explore M1 and M2 each once")
 		requireTreeEqual(t, expectedRoot, mcts.root.(*decision))
 	})
 
@@ -174,7 +174,7 @@ func TestSimulate(t *testing.T) {
 			},
 		}
 
-		require.Contains(t, []map[game.Move]int{
+		require.Contains(t, []map[game.Move]float64{
 			{move1: 2, move2: 1}, // If C1 selected
 			{move1: 1, move2: 2}, // If C2 selected
 		}, got, "Should explore one move twice and the other once")
@@ -196,7 +196,7 @@ func TestSimulate(t *testing.T) {
 		// or
 		// C1: rewards=WIN, visits=1, parent_visits=3, score = 1/1 + sqrt(2ln(3))
 		// C2: rewards=LOSS*2, visits=2, parent_visits=3, score = 2/2 + sqrt(2ln(3)/2)
-		require.Equal(t, map[game.Move]int{move1: 2, move2: 2}, got,
+		require.Equal(t, map[game.Move]float64{move1: 2, move2: 2}, got,
 			"Should explore M1 twice and M2 twice")
 		expectedRoot := &decision{
 			player:  "player1",
@@ -278,7 +278,7 @@ func TestSimulateParallel(t *testing.T) {
 		},
 	}
 
-	require.Equal(t, map[game.Move]int{move1: 2, move2: 2}, got,
+	require.Equal(t, map[game.Move]float64{move1: 2, move2: 2}, got,
 		"Should explore each move twice")
 	requireTreeEqual(t, expectedRoot, mcts.root.(*decision))
 }
@@ -348,7 +348,7 @@ func TestSimulateTerminal(t *testing.T) {
 			},
 		}
 
-		require.Equal(t, map[game.Move]int{move: 1}, got,
+		require.Equal(t, map[game.Move]float64{move: 1}, got,
 			"Should explore move once")
 		requireTreeEqual(t, expectedRoot, mcts.root.(*decision))
 	})
@@ -373,7 +373,7 @@ func TestSimulateTerminal(t *testing.T) {
 			},
 		}
 
-		require.Equal(t, map[game.Move]int{move: 2}, got,
+		require.Equal(t, map[game.Move]float64{move: 2}, got,
 			"Should explore same move twice")
 		requireTreeEqual(t, expectedRoot, mcts.root.(*decision))
 	})
@@ -398,7 +398,7 @@ func TestSimulateTerminal(t *testing.T) {
 			},
 		}
 
-		require.Equal(t, map[game.Move]int{move: 3}, got, "Should explore same move three times")
+		require.Equal(t, map[game.Move]float64{move: 3}, got, "Should explore same move three times")
 		requireTreeEqual(t, expectedRoot, mcts.root.(*decision))
 	})
 }
@@ -428,7 +428,7 @@ func TestSimulateTerminalParallel(t *testing.T) {
 		},
 	}
 
-	require.Equal(t, map[game.Move]int{move: 3}, got, "Should explore same move three times")
+	require.Equal(t, map[game.Move]float64{move: 3}, got, "Should explore same move three times")
 	requireTreeEqual(t, expectedRoot, mcts.root.(*decision))
 }
 
@@ -549,7 +549,7 @@ func TestSimulateStochastic(t *testing.T) {
 			},
 		}
 
-		require.Equal(t, map[game.Move]int{move1: 1}, got,
+		require.Equal(t, map[game.Move]float64{move1: 1}, got,
 			"Should explore stochastic move once")
 		requireTreeEqual(t, expectedRoot, mcts.root.(*decision))
 	})
@@ -583,7 +583,7 @@ func TestSimulateStochastic(t *testing.T) {
 			},
 		}
 
-		require.Equal(t, map[game.Move]int{
+		require.Equal(t, map[game.Move]float64{
 			move1: 1,
 			move2: 1,
 		}, got, "Should explore both moves once")
@@ -626,7 +626,7 @@ func TestSimulateStochastic(t *testing.T) {
 			},
 		}
 
-		require.Equal(t, map[game.Move]int{
+		require.Equal(t, map[game.Move]float64{
 			move1: 2,
 			move2: 1,
 		}, got, "Should explore stochastic move twice")
@@ -673,7 +673,7 @@ func TestSimulateStochastic(t *testing.T) {
 			},
 		}
 
-		require.Equal(t, map[game.Move]int{
+		require.Equal(t, map[game.Move]float64{
 			move1: 3,
 			move2: 1,
 		}, got, "Should explore stochastic move three times")
@@ -727,7 +727,7 @@ func TestSimulateStochastic(t *testing.T) {
 			},
 		}
 
-		require.Equal(t, map[game.Move]int{
+		require.Equal(t, map[game.Move]float64{
 			move1: 4,
 			move2: 1,
 		}, got, "Should explore stochastic move four times")
@@ -791,7 +791,7 @@ func TestSimulateStochasticParallel(t *testing.T) {
 		},
 	}
 
-	require.Equal(t, map[game.Move]int{
+	require.Equal(t, map[game.Move]float64{
 		move1: 4,
 		move2: 1,
 	}, got, "Should explore stochastic move four times")

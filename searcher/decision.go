@@ -14,7 +14,7 @@ type decision struct {
 	children map[game.Move]Node // Explored
 	hash     game.StateHash
 	rewards  float64
-	visits   int
+	visits   float64
 }
 
 func newDecision(parent Node, state game.State) *decision {
@@ -119,7 +119,7 @@ func (d *decision) applyLoss() {
 	d.visits++
 }
 
-func (d *decision) stats() (player string, rewards float64, visits int) {
+func (d *decision) stats() (player string, rewards float64, visits float64) {
 	d.RLock()
 	defer d.RUnlock()
 
@@ -145,11 +145,11 @@ func (d *decision) reverseLoss() {
 	d.visits--
 }
 
-func (d *decision) Policy() map[game.Move]int {
+func (d *decision) Policy() map[game.Move]float64 {
 	d.RLock()
 	defer d.RUnlock()
 
-	visits := make(map[game.Move]int, len(d.children))
+	visits := make(map[game.Move]float64, len(d.children))
 	for move, child := range d.children {
 		_, _, visits[move] = child.stats()
 	}
