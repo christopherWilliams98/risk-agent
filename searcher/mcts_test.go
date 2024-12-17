@@ -7,7 +7,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// mockStateDeterministic mocks game state with deterministic moves only for testing MCTS simulations
+// mockStateDeterministic mocks game state for testing MCTS behaviors with
+// deterministic moves only
 // - Always has exactly 2 moves available
 // - move1 leads to player1's turn
 // - move2 leads to player2's turn
@@ -227,6 +228,100 @@ func TestSimulate(t *testing.T) {
 				},
 			},
 		}
+		requireTreeEqual(t, expectedRoot, mcts.root.(*decision))
+	})
+}
+
+// mockStateTerminal mocks game state for testing MCTS behaviors with
+// terminal states
+// - Has exactly 1 move available
+// - Playing that move leads to P2's turn and terminal state
+// - Terminal state has no moves and P1 always wins
+type mockStateTerminal struct {
+	player   string
+	terminal bool
+}
+
+func (m mockStateTerminal) Player() string {
+	return m.player
+}
+
+func (m mockStateTerminal) LegalMoves() []game.Move {
+	if m.terminal {
+		return nil
+	}
+	return []game.Move{mockMove{id: 1}}
+}
+
+func (m mockStateTerminal) Play(move game.Move) game.State {
+	return mockStateTerminal{
+		player:   "player2",
+		terminal: true,
+	}
+}
+
+func (m mockStateTerminal) Hash() game.StateHash {
+	return 0 // Not needed for these tests
+}
+
+func (m mockStateTerminal) Winner() string {
+	if m.terminal {
+		return "player1" // P1 always wins
+	}
+	return ""
+}
+
+func TestSimulateTerminal(t *testing.T) {
+	initialState := mockStateTerminal{
+		player:   "player1",
+		terminal: false,
+	}
+	move := mockMove{id: 1}
+
+	t.Run("first episode expands to terminal state", func(t *testing.T) {
+		mcts := NewMCTS(1, WithEpisodes(1))
+		policy := mcts.Simulate(initialState, nil)
+
+		// Single episode expands to terminal state
+		expectedRoot := &decision{
+			player:  "player1",
+			rewards: WIN,
+			visits:  1,
+			children: map[game.Move]Node{
+				move: &decision{
+					player:  "player2", // Turn changes
+					rewards: LOSS,      // From P2's perspective
+					visits:  1,
+				},
+			},
+		}
+
+		require.Equal(t, map[game.Move]int{move: 1}, policy,
+			"Should explore move once")
+		requireTreeEqual(t, expectedRoot, mcts.root.(*decision))
+	})
+
+	t.Run("second episode selects terminal state", func(t *testing.T) {
+		mcts := NewMCTS(1, WithEpisodes(2))
+		policy := mcts.Simulate(initialState, nil)
+
+		// First episode expands to terminal state
+		// Second episode selects terminal state and does not expand
+		expectedRoot := &decision{
+			player:  "player1",
+			rewards: WIN * 2,
+			visits:  2,
+			children: map[game.Move]Node{
+				move: &decision{
+					player:  "player2", // Turn changes
+					rewards: LOSS * 2,  // From P2's perspective
+					visits:  2,
+				},
+			},
+		}
+
+		require.Equal(t, map[game.Move]int{move: 2}, policy,
+			"Should explore same move twice")
 		requireTreeEqual(t, expectedRoot, mcts.root.(*decision))
 	})
 }
