@@ -735,6 +735,69 @@ func TestSimulateStochastic(t *testing.T) {
 	})
 }
 
+func TestSimulateStochasticParallel(t *testing.T) {
+	move1 := mockMove{id: 1, stochastic: true}
+	move2 := mockMove{id: 2}
+	move3 := mockMove{id: 3}
+	initialState := mockStateStochastic{
+		player:      "player1",
+		state:       "S0",
+		nextOutcome: alternator(),
+	}
+
+	mcts := NewMCTS(2, WithEpisodes(5)) // 2 goroutines, 5 episodes
+	got := mcts.Simulate(initialState, nil)
+
+	// After 5 episodes with 2 goroutines:
+	// - Root should have expanded both moves
+	// - Chance node should have both outcomes expanded
+	// - One outcome should be expanded deeper
+	// - Visit counts should add up correctly
+	// - Rewards should reflect wins/losses correctly
+	expectedRoot := &decision{
+		player:  "player1",
+		rewards: WIN*2 + LOSS*3,
+		visits:  5,
+		children: map[game.Move]Node{
+			move1: &chance{
+				player:  "player1",
+				rewards: WIN*2 + LOSS*2,
+				visits:  4,
+				children: []*decision{
+					{ // Outcome S3
+						player:  "player2",
+						rewards: WIN * 2,
+						visits:  2,
+						children: map[game.Move]Node{
+							move3: &decision{
+								player:  "player2",
+								rewards: WIN,
+								visits:  1,
+							},
+						},
+					},
+					{ // Outcome S1
+						player:  "player1",
+						rewards: WIN,
+						visits:  1,
+					},
+				},
+			},
+			move2: &decision{ // S2
+				player:  "player2",
+				rewards: WIN,
+				visits:  1,
+			},
+		},
+	}
+
+	require.Equal(t, map[game.Move]int{
+		move1: 4,
+		move2: 1,
+	}, got, "Should explore stochastic move four times")
+	requireTreeEqual(t, expectedRoot, mcts.root.(*decision))
+}
+
 func requireTreeEqual(t *testing.T, expected, actual *decision) {
 	t.Helper()
 
