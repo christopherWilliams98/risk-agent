@@ -285,9 +285,8 @@ func TestSimulateParallel(t *testing.T) {
 
 // mockStateTerminal mocks game state for testing MCTS behaviors with
 // terminal states
-// - Has exactly 1 move available
-// - Playing that move leads to P2's turn and terminal state
-// - Terminal state has no moves and P1 always wins
+// - Has exactly 1 move available that leads to terminal state
+// - Terminal state has no moves
 type mockStateTerminal struct {
 	player   string
 	terminal bool
@@ -305,8 +304,12 @@ func (m mockStateTerminal) LegalMoves() []game.Move {
 }
 
 func (m mockStateTerminal) Play(move game.Move) game.State {
+	if m.terminal {
+		panic("game over")
+	}
+
 	return mockStateTerminal{
-		player:   "player2",
+		player:   m.player,
 		terminal: true,
 	}
 }
@@ -317,7 +320,7 @@ func (m mockStateTerminal) Hash() game.StateHash {
 
 func (m mockStateTerminal) Winner() string {
 	if m.terminal {
-		return "player1" // P1 always wins
+		return m.player
 	}
 	return ""
 }
@@ -327,18 +330,19 @@ func TestSimulateTerminal(t *testing.T) {
 
 	t.Run("first episode expands to terminal state", func(t *testing.T) {
 		initialState := mockStateTerminal{player: "player1"}
+
 		mcts := NewMCTS(1, WithEpisodes(1))
 		got := mcts.Simulate(initialState, nil)
 
-		// Single episode expands to terminal state
+		// First episode expands to terminal state
 		expectedRoot := &decision{
 			player:  "player1",
 			rewards: WIN,
 			visits:  1,
 			children: map[game.Move]Node{
 				move: &decision{
-					player:  "player2", // Turn changes
-					rewards: LOSS,      // From P2's perspective
+					player:  "player1",
+					rewards: WIN,
 					visits:  1,
 				},
 			},
@@ -351,10 +355,10 @@ func TestSimulateTerminal(t *testing.T) {
 
 	t.Run("second episode selects terminal state", func(t *testing.T) {
 		initialState := mockStateTerminal{player: "player1"}
+
 		mcts := NewMCTS(1, WithEpisodes(2))
 		got := mcts.Simulate(initialState, nil)
 
-		// First episode expands to terminal state
 		// Second episode selects terminal state and does not expand
 		expectedRoot := &decision{
 			player:  "player1",
@@ -362,8 +366,8 @@ func TestSimulateTerminal(t *testing.T) {
 			visits:  2,
 			children: map[game.Move]Node{
 				move: &decision{
-					player:  "player2", // Turn changes
-					rewards: LOSS * 2,  // From P2's perspective
+					player:  "player1",
+					rewards: WIN * 2,
 					visits:  2,
 				},
 			},
@@ -373,6 +377,59 @@ func TestSimulateTerminal(t *testing.T) {
 			"Should explore same move twice")
 		requireTreeEqual(t, expectedRoot, mcts.root.(*decision))
 	})
+
+	t.Run("third episode selects terminal state again", func(t *testing.T) {
+		initialState := mockStateTerminal{player: "player1"}
+
+		mcts := NewMCTS(1, WithEpisodes(3))
+		got := mcts.Simulate(initialState, nil)
+
+		// Third episode selects terminal state again and does not expand
+		expectedRoot := &decision{
+			player:  "player1",
+			rewards: WIN * 3,
+			visits:  3,
+			children: map[game.Move]Node{
+				move: &decision{
+					player:  "player1",
+					rewards: WIN * 3,
+					visits:  3,
+				},
+			},
+		}
+
+		require.Equal(t, map[game.Move]int{move: 3}, got, "Should explore same move three times")
+		requireTreeEqual(t, expectedRoot, mcts.root.(*decision))
+	})
+}
+
+func TestSimulateTerminalParallel(t *testing.T) {
+	move := mockMove{id: 1}
+	initialState := mockStateTerminal{player: "player1"}
+
+	mcts := NewMCTS(2, WithEpisodes(3))
+	got := mcts.Simulate(initialState, nil)
+
+	// After 3 episodes with 2 goroutines:
+	// - Root should have expanded the move once
+	// - The child is terminal and selected twice
+	// - Visit counts should add up correctly
+	// - Rewards should reflect wins/losses correctly
+	expectedRoot := &decision{
+		player:  "player1",
+		rewards: WIN * 3,
+		visits:  3,
+		children: map[game.Move]Node{
+			move: &decision{
+				player:  "player1",
+				rewards: WIN * 3,
+				visits:  3,
+			},
+		},
+	}
+
+	require.Equal(t, map[game.Move]int{move: 3}, got, "Should explore same move three times")
+	requireTreeEqual(t, expectedRoot, mcts.root.(*decision))
 }
 
 // alternator returns a function that alternates between two outcomes
