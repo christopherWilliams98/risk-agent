@@ -326,6 +326,302 @@ func TestSimulateTerminal(t *testing.T) {
 	})
 }
 
+// mockStateStochastic mocks game state for testing MCTS behaviors with
+// mixed deterministic and stochastic moves
+// - S0 has 2 moves available: M1 (stochastic) and M2 (deterministic)
+// - Other states have only 1 move: M3 (deterministic)
+// - M1 leads to 2 possible outcomes: S1 (P1's turn) or S3 (P2's turn)
+// - M2 leads to S2 (P2's turn)
+// - Terminal after 2 moves and whoever last played wins
+type mockStateStochastic struct {
+	player  string
+	state   string // Track different states: S0, S1, S2, S3
+	depth   int
+	counter int // To alternate stochastic outcomes
+}
+
+func (m *mockStateStochastic) Player() string {
+	return m.player
+}
+
+func (m *mockStateStochastic) LegalMoves() []game.Move {
+	if m.depth >= 2 { // Terminal after 2 moves
+		return nil
+	}
+	if m.state == "S0" { // Initial state
+		return []game.Move{
+			mockMove{id: 1, stochastic: true}, // M1: stochastic
+			mockMove{id: 2},                   // M2: deterministic
+		}
+	}
+	// S1, S2, S3 have the same move available
+	return []game.Move{mockMove{id: 3}}
+}
+
+func (m *mockStateStochastic) Play(move game.Move) game.State {
+	if m.depth >= 2 {
+		panic("game is already over")
+	}
+
+	if m.state == "S0" {
+		if move.IsStochastic() {
+			// M1 is stochastic - alternate between S1 and S3
+			m.counter++
+			if m.counter%2 == 1 {
+				return &mockStateStochastic{ // First outcome: S1 P1's turn
+					player: "player1",
+					state:  "S1",
+					depth:  m.depth + 1,
+				}
+			}
+			return &mockStateStochastic{ // Second outcome: S3 P2's turn
+				player: "player2",
+				state:  "S3",
+				depth:  m.depth + 1,
+			}
+		}
+		// M2 is deterministic
+		return &mockStateStochastic{
+			player: "player2", // S2: P2's turn
+			state:  "S2",
+			depth:  m.depth + 1,
+		}
+	}
+
+	// Terminal state after 2 moves
+	return &mockStateStochastic{
+		player: m.player,
+		state:  m.state,
+		depth:  m.depth + 1,
+	}
+}
+
+func (m *mockStateStochastic) Hash() game.StateHash {
+	return game.StateHash(m.state[len(m.state)-1]) // Distinguish states
+}
+
+func (m *mockStateStochastic) Winner() string {
+	if m.depth >= 2 {
+		return m.player // Whoever played last wins
+	}
+	return ""
+}
+
+func TestSimulateStochastic(t *testing.T) {
+	move1 := mockMove{id: 1, stochastic: true}
+	move2 := mockMove{id: 2}
+	move3 := mockMove{id: 3}
+
+	t.Run("first episode expands stochastic move with chance node", func(t *testing.T) {
+		initialState := &mockStateStochastic{
+			player: "player1",
+			state:  "S0",
+			depth:  0,
+		}
+		mcts := NewMCTS(1, WithEpisodes(1))
+		policy := mcts.Simulate(initialState, nil)
+
+		// First episode expands root with M1 to chance node and uses S1 for rollout
+		expectedRoot := &decision{
+			player:  "player1",
+			rewards: WIN,
+			visits:  1,
+			children: map[game.Move]Node{
+				move1: &chance{
+					player:   "player1",
+					rewards:  WIN,
+					visits:   1,
+					children: []*decision{}, // No outcomes yet
+				},
+			},
+		}
+
+		require.Equal(t, map[game.Move]int{move1: 1}, policy,
+			"Should explore stochastic move once")
+		requireTreeEqual(t, expectedRoot, mcts.root.(*decision))
+	})
+
+	t.Run("second episode expands deterministic move", func(t *testing.T) {
+		initialState := &mockStateStochastic{
+			player: "player1",
+			state:  "S0",
+			depth:  0,
+		}
+		mcts := NewMCTS(1, WithEpisodes(2))
+		policy := mcts.Simulate(initialState, nil)
+
+		// Second episode expands root with M2 to S2
+		expectedRoot := &decision{
+			player:  "player1",
+			rewards: WIN + LOSS,
+			visits:  2,
+			children: map[game.Move]Node{
+				move1: &chance{
+					player:   "player1",
+					rewards:  WIN,
+					visits:   1,
+					children: []*decision{}, // No outcomes yet
+				},
+				move2: &decision{ // S2
+					player:  "player2",
+					rewards: WIN,
+					visits:  1,
+				},
+			},
+		}
+
+		require.Equal(t, map[game.Move]int{
+			move1: 1,
+			move2: 1,
+		}, policy, "Should explore both moves once")
+		requireTreeEqual(t, expectedRoot, mcts.root.(*decision))
+	})
+
+	t.Run("third episode expands one stochastic outcome", func(t *testing.T) {
+		initialState := &mockStateStochastic{
+			player: "player1",
+			state:  "S0",
+			depth:  0,
+		}
+		mcts := NewMCTS(1, WithEpisodes(3))
+		policy := mcts.Simulate(initialState, nil)
+
+		// First episode used outcome S1 for rollout
+		// Third episode expands chance node with outcome S3
+		expectedRoot := &decision{
+			player:  "player1",
+			rewards: WIN + LOSS*2,
+			visits:  3,
+			children: map[game.Move]Node{
+				move1: &chance{
+					player:  "player1",
+					rewards: WIN + LOSS,
+					visits:  2,
+					children: []*decision{
+						{ // Outcome S3
+							player:  "player2",
+							rewards: WIN,
+							visits:  1,
+						},
+					},
+				},
+				move2: &decision{ // S2
+					player:  "player2",
+					rewards: WIN,
+					visits:  1,
+				},
+			},
+		}
+
+		require.Equal(t, map[game.Move]int{
+			move1: 2,
+			move2: 1,
+		}, policy, "Should explore stochastic move twice")
+		requireTreeEqual(t, expectedRoot, mcts.root.(*decision))
+	})
+
+	t.Run("fourth episode expands the other stochastic outcome", func(t *testing.T) {
+		initialState := &mockStateStochastic{
+			player: "player1",
+			state:  "S0",
+			depth:  0,
+		}
+		mcts := NewMCTS(1, WithEpisodes(4))
+		policy := mcts.Simulate(initialState, nil)
+
+		// Fourth episode expands chance node with outcome S1
+		expectedRoot := &decision{
+			player:  "player1",
+			rewards: WIN*2 + LOSS*2,
+			visits:  4,
+			children: map[game.Move]Node{
+				move1: &chance{
+					player:  "player1",
+					rewards: WIN*2 + LOSS,
+					visits:  3,
+					children: []*decision{
+						{ // Outcome S3
+							player:  "player2",
+							rewards: WIN,
+							visits:  1,
+						},
+						{ // Outcome S1
+							player:  "player1",
+							rewards: WIN,
+							visits:  1,
+						},
+					},
+				},
+				move2: &decision{ // S2
+					player:  "player2",
+					rewards: WIN,
+					visits:  1,
+				},
+			},
+		}
+
+		require.Equal(t, map[game.Move]int{
+			move1: 3,
+			move2: 1,
+		}, policy, "Should explore stochastic move three times")
+		requireTreeEqual(t, expectedRoot, mcts.root.(*decision))
+	})
+
+	t.Run("fifth episode selects existing outcome", func(t *testing.T) {
+		initialState := &mockStateStochastic{
+			player: "player1",
+			state:  "S0",
+			depth:  0,
+		}
+		mcts := NewMCTS(1, WithEpisodes(5))
+		policy := mcts.Simulate(initialState, nil)
+
+		// Fifth episode selects outcome S1 and expands it with M3
+		expectedRoot := &decision{
+			player:  "player1",
+			rewards: WIN*2 + LOSS*3,
+			visits:  5,
+			children: map[game.Move]Node{
+				move1: &chance{
+					player:  "player1",
+					rewards: WIN*2 + LOSS*2,
+					visits:  4,
+					children: []*decision{
+						{ // Outcome S3
+							player:  "player2",
+							rewards: WIN * 2,
+							visits:  2,
+							children: map[game.Move]Node{
+								move3: &decision{ // Expanded by M3
+									player:  "player2",
+									rewards: WIN,
+									visits:  1,
+								},
+							},
+						},
+						{ // Outcome S1
+							player:  "player1",
+							rewards: WIN,
+							visits:  1,
+						},
+					},
+				},
+				move2: &decision{ // S2
+					player:  "player2",
+					rewards: WIN,
+					visits:  1,
+				},
+			},
+		}
+
+		require.Equal(t, map[game.Move]int{
+			move1: 4,
+			move2: 1,
+		}, policy, "Should explore stochastic move four times")
+		requireTreeEqual(t, expectedRoot, mcts.root.(*decision))
+	})
+}
+
 func requireTreeEqual(t *testing.T, expected, actual *decision) {
 	t.Helper()
 
