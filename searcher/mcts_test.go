@@ -70,7 +70,7 @@ func TestSimulate(t *testing.T) {
 	t.Run("first episode expands root with one child", func(t *testing.T) {
 		initialState := mockStateDeterministic{player: "player1"}
 		mcts := NewMCTS(1, WithEpisodes(1))
-		policy := mcts.Simulate(initialState, nil)
+		got := mcts.Simulate(initialState, nil)
 
 		// 1st episode expands root with M1 to C1
 		expectedRoot := &decision{
@@ -85,14 +85,14 @@ func TestSimulate(t *testing.T) {
 				},
 			},
 		}
-		require.Equal(t, map[game.Move]int{move1: 1}, policy, "Should explore M1 once")
+		require.Equal(t, map[game.Move]int{move1: 1}, got, "Should explore M1 once")
 		requireTreeEqual(t, expectedRoot, mcts.root.(*decision))
 	})
 
 	t.Run("second episode expands root with second child", func(t *testing.T) {
 		initialState := mockStateDeterministic{player: "player1"}
 		mcts := NewMCTS(1, WithEpisodes(2))
-		policy := mcts.Simulate(initialState, nil)
+		got := mcts.Simulate(initialState, nil)
 
 		// 2nd episode expands root with M2 to C2
 		expectedRoot := &decision{
@@ -112,14 +112,14 @@ func TestSimulate(t *testing.T) {
 				},
 			},
 		}
-		require.Equal(t, map[game.Move]int{move1: 1, move2: 1}, policy, "Should explore M1 and M2 each once")
+		require.Equal(t, map[game.Move]int{move1: 1, move2: 1}, got, "Should explore M1 and M2 each once")
 		requireTreeEqual(t, expectedRoot, mcts.root.(*decision))
 	})
 
 	t.Run("third episode selects either child", func(t *testing.T) {
 		initialState := mockStateDeterministic{player: "player1"}
 		mcts := NewMCTS(1, WithEpisodes(3))
-		policy := mcts.Simulate(initialState, nil)
+		got := mcts.Simulate(initialState, nil)
 
 		// After 2 episodes, both moves have been tried once
 		// 3rd episode selects either child at random since they have equal UCT scores:
@@ -177,20 +177,18 @@ func TestSimulate(t *testing.T) {
 		require.Contains(t, []map[game.Move]int{
 			{move1: 2, move2: 1}, // If C1 selected
 			{move1: 1, move2: 2}, // If C2 selected
-		}, policy, "Should explore one move twice and the other once")
-
-		actualRoot := mcts.root.(*decision)
-		if policy[move1] == 2 {
-			requireTreeEqual(t, expectedRoot1, actualRoot)
+		}, got, "Should explore one move twice and the other once")
+		if got[move1] == 2 {
+			requireTreeEqual(t, expectedRoot1, mcts.root.(*decision))
 		} else {
-			requireTreeEqual(t, expectedRoot2, actualRoot)
+			requireTreeEqual(t, expectedRoot2, mcts.root.(*decision))
 		}
 	})
 
 	t.Run("fourth episode balances exploration vs exploitation", func(t *testing.T) {
 		initialState := mockStateDeterministic{player: "player1"}
 		mcts := NewMCTS(1, WithEpisodes(4))
-		policy := mcts.Simulate(initialState, nil)
+		got := mcts.Simulate(initialState, nil)
 
 		// 4th episode selects the child not selected by E3 since it has equal exploitation but bigger exploration
 		// C1: rewards=WIN*2, visits=2, parent_visits=3, score = 2/2 + sqrt(2ln(3)/2)
@@ -198,7 +196,7 @@ func TestSimulate(t *testing.T) {
 		// or
 		// C1: rewards=WIN, visits=1, parent_visits=3, score = 1/1 + sqrt(2ln(3))
 		// C2: rewards=LOSS*2, visits=2, parent_visits=3, score = 2/2 + sqrt(2ln(3)/2)
-		require.Equal(t, map[game.Move]int{move1: 2, move2: 2}, policy,
+		require.Equal(t, map[game.Move]int{move1: 2, move2: 2}, got,
 			"Should explore M1 twice and M2 twice")
 		expectedRoot := &decision{
 			player:  "player1",
@@ -233,6 +231,56 @@ func TestSimulate(t *testing.T) {
 		}
 		requireTreeEqual(t, expectedRoot, mcts.root.(*decision))
 	})
+}
+
+func TestSimulateParallel(t *testing.T) {
+	move1 := mockMove{id: 1}
+	move2 := mockMove{id: 2}
+	initialState := mockStateDeterministic{player: "player1"}
+
+	mcts := NewMCTS(2, WithEpisodes(4)) // 2 goroutines, 4 episodes
+	got := mcts.Simulate(initialState, nil)
+
+	// After 4 episodes with 2 goroutines:
+	// - Root should have expanded both moves
+	// - Each child should be selected and expanded once
+	// - Visit counts should add up correctly
+	// - Rewards should reflect wins/losses correctly
+	expectedRoot := &decision{
+		player:  "player1",
+		rewards: WIN * 4,
+		visits:  4,
+		children: map[game.Move]Node{
+			move1: &decision{
+				player:  "player1",
+				rewards: WIN * 2,
+				visits:  2,
+				children: map[game.Move]Node{
+					move1: &decision{
+						player:  "player1",
+						rewards: WIN,
+						visits:  1,
+					},
+				},
+			},
+			move2: &decision{
+				player:  "player2",
+				rewards: LOSS * 2,
+				visits:  2,
+				children: map[game.Move]Node{
+					move1: &decision{
+						player:  "player1",
+						rewards: WIN,
+						visits:  1,
+					},
+				},
+			},
+		},
+	}
+
+	require.Equal(t, map[game.Move]int{move1: 2, move2: 2}, got,
+		"Should explore each move twice")
+	requireTreeEqual(t, expectedRoot, mcts.root.(*decision))
 }
 
 // mockStateTerminal mocks game state for testing MCTS behaviors with
@@ -280,7 +328,7 @@ func TestSimulateTerminal(t *testing.T) {
 	t.Run("first episode expands to terminal state", func(t *testing.T) {
 		initialState := mockStateTerminal{player: "player1"}
 		mcts := NewMCTS(1, WithEpisodes(1))
-		policy := mcts.Simulate(initialState, nil)
+		got := mcts.Simulate(initialState, nil)
 
 		// Single episode expands to terminal state
 		expectedRoot := &decision{
@@ -296,7 +344,7 @@ func TestSimulateTerminal(t *testing.T) {
 			},
 		}
 
-		require.Equal(t, map[game.Move]int{move: 1}, policy,
+		require.Equal(t, map[game.Move]int{move: 1}, got,
 			"Should explore move once")
 		requireTreeEqual(t, expectedRoot, mcts.root.(*decision))
 	})
@@ -304,7 +352,7 @@ func TestSimulateTerminal(t *testing.T) {
 	t.Run("second episode selects terminal state", func(t *testing.T) {
 		initialState := mockStateTerminal{player: "player1"}
 		mcts := NewMCTS(1, WithEpisodes(2))
-		policy := mcts.Simulate(initialState, nil)
+		got := mcts.Simulate(initialState, nil)
 
 		// First episode expands to terminal state
 		// Second episode selects terminal state and does not expand
@@ -321,7 +369,7 @@ func TestSimulateTerminal(t *testing.T) {
 			},
 		}
 
-		require.Equal(t, map[game.Move]int{move: 2}, policy,
+		require.Equal(t, map[game.Move]int{move: 2}, got,
 			"Should explore same move twice")
 		requireTreeEqual(t, expectedRoot, mcts.root.(*decision))
 	})
@@ -427,7 +475,7 @@ func TestSimulateStochastic(t *testing.T) {
 			nextOutcome: alternator(),
 		}
 		mcts := NewMCTS(1, WithEpisodes(1))
-		policy := mcts.Simulate(initialState, nil)
+		got := mcts.Simulate(initialState, nil)
 
 		// First episode expands root with M1 to chance node and uses S1 for rollout
 		expectedRoot := &decision{
@@ -443,11 +491,10 @@ func TestSimulateStochastic(t *testing.T) {
 				},
 			},
 		}
-		actualRoot := mcts.root.(*decision)
 
-		require.Equal(t, map[game.Move]int{move1: 1}, policy,
+		require.Equal(t, map[game.Move]int{move1: 1}, got,
 			"Should explore stochastic move once")
-		requireTreeEqual(t, expectedRoot, actualRoot)
+		requireTreeEqual(t, expectedRoot, mcts.root.(*decision))
 	})
 
 	t.Run("second episode expands deterministic move", func(t *testing.T) {
@@ -457,7 +504,7 @@ func TestSimulateStochastic(t *testing.T) {
 			nextOutcome: alternator(),
 		}
 		mcts := NewMCTS(1, WithEpisodes(2))
-		policy := mcts.Simulate(initialState, nil)
+		got := mcts.Simulate(initialState, nil)
 
 		// Second episode expands root with M2 to S2
 		expectedRoot := &decision{
@@ -478,13 +525,12 @@ func TestSimulateStochastic(t *testing.T) {
 				},
 			},
 		}
-		actualRoot := mcts.root.(*decision)
 
 		require.Equal(t, map[game.Move]int{
 			move1: 1,
 			move2: 1,
-		}, policy, "Should explore both moves once")
-		requireTreeEqual(t, expectedRoot, actualRoot)
+		}, got, "Should explore both moves once")
+		requireTreeEqual(t, expectedRoot, mcts.root.(*decision))
 	})
 
 	t.Run("third episode expands one stochastic outcome", func(t *testing.T) {
@@ -494,7 +540,7 @@ func TestSimulateStochastic(t *testing.T) {
 			nextOutcome: alternator(),
 		}
 		mcts := NewMCTS(1, WithEpisodes(3))
-		policy := mcts.Simulate(initialState, nil)
+		got := mcts.Simulate(initialState, nil)
 
 		// First episode used outcome S1 for rollout
 		// Third episode expands chance node with outcome S3
@@ -522,13 +568,12 @@ func TestSimulateStochastic(t *testing.T) {
 				},
 			},
 		}
-		actualRoot := mcts.root.(*decision)
 
 		require.Equal(t, map[game.Move]int{
 			move1: 2,
 			move2: 1,
-		}, policy, "Should explore stochastic move twice")
-		requireTreeEqual(t, expectedRoot, actualRoot)
+		}, got, "Should explore stochastic move twice")
+		requireTreeEqual(t, expectedRoot, mcts.root.(*decision))
 	})
 
 	t.Run("fourth episode expands the other stochastic outcome", func(t *testing.T) {
@@ -538,7 +583,7 @@ func TestSimulateStochastic(t *testing.T) {
 			nextOutcome: alternator(),
 		}
 		mcts := NewMCTS(1, WithEpisodes(4))
-		policy := mcts.Simulate(initialState, nil)
+		got := mcts.Simulate(initialState, nil)
 
 		// Fourth episode expands chance node with outcome S1
 		expectedRoot := &decision{
@@ -570,13 +615,12 @@ func TestSimulateStochastic(t *testing.T) {
 				},
 			},
 		}
-		actualRoot := mcts.root.(*decision)
 
 		require.Equal(t, map[game.Move]int{
 			move1: 3,
 			move2: 1,
-		}, policy, "Should explore stochastic move three times")
-		requireTreeEqual(t, expectedRoot, actualRoot)
+		}, got, "Should explore stochastic move three times")
+		requireTreeEqual(t, expectedRoot, mcts.root.(*decision))
 	})
 
 	t.Run("fifth episode selects existing outcome", func(t *testing.T) {
@@ -586,7 +630,7 @@ func TestSimulateStochastic(t *testing.T) {
 			nextOutcome: alternator(),
 		}
 		mcts := NewMCTS(1, WithEpisodes(5))
-		policy := mcts.Simulate(initialState, nil)
+		got := mcts.Simulate(initialState, nil)
 
 		// Fifth episode selects outcome S1 and expands it with M3
 		expectedRoot := &decision{
@@ -625,17 +669,14 @@ func TestSimulateStochastic(t *testing.T) {
 				},
 			},
 		}
-		actualRoot := mcts.root.(*decision)
 
 		require.Equal(t, map[game.Move]int{
 			move1: 4,
 			move2: 1,
-		}, policy, "Should explore stochastic move four times")
-		requireTreeEqual(t, expectedRoot, actualRoot)
+		}, got, "Should explore stochastic move four times")
+		requireTreeEqual(t, expectedRoot, mcts.root.(*decision))
 	})
 }
-
-// TODO: TestSimulateParallel
 
 func requireTreeEqual(t *testing.T, expected, actual *decision) {
 	t.Helper()
