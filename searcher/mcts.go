@@ -8,8 +8,7 @@ import (
 	"golang.org/x/exp/rand"
 )
 
-// TODO: need to export?
-type option func(mcts *MCTS)
+type Option func(mcts *MCTS)
 
 type Segment struct {
 	Move  game.Move
@@ -23,19 +22,19 @@ type MCTS struct {
 	root       Node
 }
 
-func WithEpisodes(episodes int) option {
+func WithEpisodes(episodes int) Option {
 	return func(u *MCTS) {
 		u.episodes = episodes
 	}
 }
 
-func WithDuration(duration time.Duration) option {
+func WithDuration(duration time.Duration) Option {
 	return func(u *MCTS) {
 		u.duration = duration
 	}
 }
 
-func NewMCTS(goroutines int, options ...option) *MCTS {
+func NewMCTS(goroutines int, options ...Option) *MCTS {
 	u := &MCTS{goroutines: goroutines}
 	for _, option := range options {
 		option(u)
@@ -101,7 +100,7 @@ func countdown(goroutines int, duration time.Duration, root Node, state game.Sta
 	wg.Wait()
 }
 
-func (m MCTS) findSubtree(path []Segment, state game.State) Node {
+func (m *MCTS) findSubtree(path []Segment, state game.State) Node {
 	if m.root == nil {
 		return newDecision(nil, state)
 	}
@@ -155,7 +154,6 @@ func rollout(state game.State) string {
 	moves := state.LegalMoves()
 	for len(moves) > 0 {
 		// Follow a random rollout policy
-		// TODO: 75% attack vs pass, 90% fortify vs pass
 		move := moves[rand.Intn(len(moves))]
 		state = state.Play(move)
 		moves = state.LegalMoves()

@@ -19,7 +19,7 @@ type decision struct {
 
 func newDecision(parent Node, state game.State) *decision {
 	// TODO: randomize moves
-	// TODO: prioritize 'pass' moves (in attack and maneuver phases)
+	// TODO: prioritize exploring 'pass' moves (in attack and maneuver phases)
 	moves := state.LegalMoves()
 
 	// Lazily compute state ID
@@ -67,7 +67,6 @@ func (d *decision) SelectOrExpand(state game.State) (Node, game.State, bool) {
 
 func (d *decision) expands(state game.State) (Node, game.State) {
 	move := d.moves[0]
-	// TODO: copy state or pass arg by value?
 	state = state.Play(move)
 
 	var child Node
@@ -91,9 +90,7 @@ func (d *decision) selects(state game.State) (Node, game.State) {
 		panic("unexplored parent node (0 visits)")
 	}
 
-	// TODO: potentially parallelize selection policy computation on child
-	//  nodes (large branching factor, many children, O(N) complexity)
-	policy := newUCT(C_SQUARED, d.visits)
+	policy := newUCT(CSquared, d.visits)
 	maxValue := math.Inf(-1)
 	var maxMove game.Move
 	for move, child := range d.children {
@@ -111,7 +108,6 @@ func (d *decision) selects(state game.State) (Node, game.State) {
 			maxMove = move
 		}
 	}
-	// TODO: copy state or pass arg by value?
 	return d.children[maxMove], state.Play(maxMove)
 }
 
@@ -134,7 +130,7 @@ func (d *decision) Backup(winner string) Node {
 	d.Lock()
 	defer d.Unlock()
 
-	if d.parent != nil { // Virtual loss is not applied on root Node
+	if d.parent != nil { // Virtual loss not applied on root node
 		d.reverseLoss()
 	}
 
