@@ -66,9 +66,9 @@ func (m mockStateDeterministic) Winner() string {
 func TestSimulate(t *testing.T) {
 	move1 := mockMove{id: 1}
 	move2 := mockMove{id: 2}
-	initialState := mockStateDeterministic{player: "player1", depth: 0}
 
-	t.Run("one episode", func(t *testing.T) {
+	t.Run("first episode expands root with one child", func(t *testing.T) {
+		initialState := mockStateDeterministic{player: "player1"}
 		mcts := NewMCTS(1, WithEpisodes(1))
 		policy := mcts.Simulate(initialState, nil)
 
@@ -89,7 +89,8 @@ func TestSimulate(t *testing.T) {
 		requireTreeEqual(t, expectedRoot, mcts.root.(*decision))
 	})
 
-	t.Run("two episodes", func(t *testing.T) {
+	t.Run("second episode expands root with second child", func(t *testing.T) {
+		initialState := mockStateDeterministic{player: "player1"}
 		mcts := NewMCTS(1, WithEpisodes(2))
 		policy := mcts.Simulate(initialState, nil)
 
@@ -115,7 +116,8 @@ func TestSimulate(t *testing.T) {
 		requireTreeEqual(t, expectedRoot, mcts.root.(*decision))
 	})
 
-	t.Run("three episodes", func(t *testing.T) {
+	t.Run("third episode selects either child", func(t *testing.T) {
+		initialState := mockStateDeterministic{player: "player1"}
 		mcts := NewMCTS(1, WithEpisodes(3))
 		policy := mcts.Simulate(initialState, nil)
 
@@ -185,7 +187,8 @@ func TestSimulate(t *testing.T) {
 		}
 	})
 
-	t.Run("four episodes", func(t *testing.T) {
+	t.Run("fourth episode balances exploration vs exploitation", func(t *testing.T) {
+		initialState := mockStateDeterministic{player: "player1"}
 		mcts := NewMCTS(1, WithEpisodes(4))
 		policy := mcts.Simulate(initialState, nil)
 
@@ -272,13 +275,10 @@ func (m mockStateTerminal) Winner() string {
 }
 
 func TestSimulateTerminal(t *testing.T) {
-	initialState := mockStateTerminal{
-		player:   "player1",
-		terminal: false,
-	}
 	move := mockMove{id: 1}
 
 	t.Run("first episode expands to terminal state", func(t *testing.T) {
+		initialState := mockStateTerminal{player: "player1"}
 		mcts := NewMCTS(1, WithEpisodes(1))
 		policy := mcts.Simulate(initialState, nil)
 
@@ -302,6 +302,7 @@ func TestSimulateTerminal(t *testing.T) {
 	})
 
 	t.Run("second episode selects terminal state", func(t *testing.T) {
+		initialState := mockStateTerminal{player: "player1"}
 		mcts := NewMCTS(1, WithEpisodes(2))
 		policy := mcts.Simulate(initialState, nil)
 
