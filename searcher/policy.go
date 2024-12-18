@@ -8,8 +8,8 @@ const CSquared = 2.0 // Exploration constant
 
 const MaxCutoff = 10000 // Maximum rollout depth in moves
 
-const WIN = 1.0   // Reward for winning outcome
-const LOSS = -WIN // Reward for loss outcome (negate from opponent perspective)
+const Win = 1.0   // Reward for winning outcome
+const Loss = -Win // Reward for loss outcome (negated from opponent perspective)
 
 type uct struct {
 	numerator float64
@@ -28,4 +28,11 @@ func (u uct) evaluate(q float64, n float64) float64 {
 	}
 	// UCT = q/n + sqrt(c^2*ln(N)/n)
 	return q/n + math.Sqrt(u.numerator/n)
+}
+
+func computeReward(player string, score float64, current string) float64 {
+	if player == current {
+		return score
+	}
+	return -score
 }

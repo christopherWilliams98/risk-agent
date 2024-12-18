@@ -60,7 +60,7 @@ func (c *chance) applyLoss() {
 	c.Lock()
 	defer c.Unlock()
 
-	c.rewards += LOSS
+	c.rewards += Loss
 	c.visits++
 }
 
@@ -71,20 +71,20 @@ func (c *chance) stats() (player string, rewards float64, visits float64) {
 	return c.player, c.rewards, c.visits
 }
 
-func (c *chance) Backup(winner string) Node {
+func (c *chance) Backup(player string, score float64) Node {
 	c.Lock()
 	defer c.Unlock()
 
 	c.reverseLoss()
 
-	c.rewards += computeReward(winner, c.player)
+	c.rewards += computeReward(player, score, c.player)
 	c.visits++
 
 	return c.parent
 }
 
 func (c *chance) reverseLoss() {
-	c.rewards -= LOSS
+	c.rewards -= Loss
 	c.visits--
 }
 

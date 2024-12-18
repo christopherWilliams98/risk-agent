@@ -18,7 +18,7 @@ func TestChanceSelectOrExpand(t *testing.T) {
 		gotChild, gotState, gotSelected := node.SelectOrExpand(state)
 
 		require.IsType(t, &decision{}, gotChild, "Child should be a decision node")
-		require.Equal(t, LOSS, gotChild.(*decision).rewards, "Child should apply a temporary loss")
+		require.Equal(t, Loss, gotChild.(*decision).rewards, "Child should apply a temporary loss")
 		require.Equal(t, 1.0, gotChild.(*decision).visits, "Child should apply a temporary loss")
 		require.NotEqual(t, child, gotChild, "Node should expand with a new child")
 		require.Equal(t, 2, len(node.children), "Node should expand with a new child")
@@ -40,7 +40,7 @@ func TestChanceSelectOrExpand(t *testing.T) {
 		gotChild, gotState, gotSelected := node.SelectOrExpand(state)
 
 		require.IsType(t, &decision{}, gotChild, "Child should be a decision node")
-		require.Equal(t, LOSS*2, gotChild.(*decision).rewards, "Child should apply 2 temporary losses")
+		require.Equal(t, Loss*2, gotChild.(*decision).rewards, "Child should apply 2 temporary losses")
 		require.Equal(t, 2.0, gotChild.(*decision).visits, "Child should apply 2 temporary losses")
 		require.Equal(t, otherChild, gotChild, "Node should select an existing child")
 		require.Equal(t, 2, len(node.children), "Node should select an existing child")
@@ -56,14 +56,14 @@ func TestChanceBackup(t *testing.T) {
 		node := &chance{
 			parent:  parent,
 			player:  "player1",
-			rewards: LOSS,
+			rewards: Loss,
 			visits:  1,
 		}
 
-		got := node.Backup("player1")
+		got := node.Backup("player1", Win)
 
 		require.Equal(t, parent, got, "Should return the parent node")
-		require.Equal(t, WIN, node.rewards, "Should reverse virtual loss and add a win")
+		require.Equal(t, Win, node.rewards, "Should reverse virtual loss and add a win")
 		require.Equal(t, 1.0, node.visits, "Should reverse virtual loss and add a visit")
 	})
 
@@ -73,14 +73,14 @@ func TestChanceBackup(t *testing.T) {
 		node := &chance{
 			parent:  parent,
 			player:  "player1",
-			rewards: LOSS,
+			rewards: Loss,
 			visits:  1,
 		}
 
-		got := node.Backup("player2")
+		got := node.Backup("player2", Win)
 
 		require.Equal(t, parent, got, "Should return the parent node")
-		require.Equal(t, LOSS, node.rewards, "Should reverse virtual loss and add a loss")
+		require.Equal(t, Loss, node.rewards, "Should reverse virtual loss and add a loss")
 		require.Equal(t, 1.0, node.visits, "Should reverse virtual loss and add a visit")
 	})
 }

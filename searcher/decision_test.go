@@ -50,7 +50,7 @@ func TestDecisionSelectOrExpand(t *testing.T) {
 		require.Equal(t, maxChild, gotChild, "Node should select child with max policy value")
 		require.IsType(t, &decision{}, gotChild,
 			"Child should be a decision node")
-		require.Equal(t, 1+LOSS, gotChild.(*decision).rewards, "Child should apply a temporary loss")
+		require.Equal(t, 1+Loss, gotChild.(*decision).rewards, "Child should apply a temporary loss")
 		require.Equal(t, 2.0, gotChild.(*decision).visits,
 			"Child should apply a temporary loss")
 		require.Equal(t, []game.Move{maxMove}, gotState.(mockState).played, "State should update by the move to the max policy child")
@@ -76,7 +76,7 @@ func TestDecisionSelectOrExpand(t *testing.T) {
 		require.Equal(t, maxChild, gotChild, "Node should select child with max policy value")
 		require.IsType(t, &chance{}, gotChild,
 			"Child should be a chance node")
-		require.Equal(t, 1+LOSS, gotChild.(*chance).rewards, "Child should apply a temporary loss")
+		require.Equal(t, 1+Loss, gotChild.(*chance).rewards, "Child should apply a temporary loss")
 		require.Equal(t, 2.0, gotChild.(*chance).visits,
 			"Child should apply a temporary loss")
 		require.Equal(t, []game.Move{maxMove}, gotState.(mockState).played, "State should update by the move to the max policy child")
@@ -102,7 +102,7 @@ func TestDecisionSelectOrExpand(t *testing.T) {
 
 		require.Equal(t, minChild, gotChild, "Node should select child with max policy value that minimizes opponent rewards")
 		require.IsType(t, &decision{}, gotChild, "Child should be a decision node")
-		require.Equal(t, LOSS, gotChild.(*decision).rewards, "Child should apply a temporary loss")
+		require.Equal(t, Loss, gotChild.(*decision).rewards, "Child should apply a temporary loss")
 		require.Equal(t, 2.0, gotChild.(*decision).visits,
 			"Child should apply a temporary loss")
 		require.Equal(t, []game.Move{minMove}, gotState.(mockState).played, "State should update by the move to the max policy child")
@@ -128,7 +128,7 @@ func TestDecisionSelectOrExpand(t *testing.T) {
 
 		require.Equal(t, minChild, gotChild, "Node should select child with max policy value that minimizes opponent rewards")
 		require.IsType(t, &chance{}, gotChild, "Child should be a chance node")
-		require.Equal(t, LOSS, gotChild.(*chance).rewards, "Child should apply a temporary loss")
+		require.Equal(t, Loss, gotChild.(*chance).rewards, "Child should apply a temporary loss")
 		require.Equal(t, 2.0, gotChild.(*chance).visits,
 			"Child should apply a temporary loss")
 		require.Equal(t, []game.Move{minMove}, gotState.(mockState).played, "State should update by the move to the max policy child")
@@ -150,7 +150,7 @@ func TestDecisionSelectOrExpand(t *testing.T) {
 
 		require.IsType(t, &decision{}, gotChild,
 			"Child should be a decision node")
-		require.Equal(t, LOSS, gotChild.(*decision).rewards, "Child should apply a temporary loss")
+		require.Equal(t, Loss, gotChild.(*decision).rewards, "Child should apply a temporary loss")
 		require.Equal(t, 1.0, gotChild.(*decision).visits,
 			"Child should apply a temporary loss")
 		require.Equal(t, 2, len(node.children), "Node should add a new child")
@@ -172,7 +172,7 @@ func TestDecisionSelectOrExpand(t *testing.T) {
 
 		require.IsType(t, &chance{}, gotChild,
 			"Child should be a chance node")
-		require.Equal(t, LOSS, gotChild.(*chance).rewards, "Child should apply a temporary loss")
+		require.Equal(t, Loss, gotChild.(*chance).rewards, "Child should apply a temporary loss")
 		require.Equal(t, 1.0, gotChild.(*chance).visits,
 			"Child should apply a temporary loss")
 		require.Equal(t, []game.Move{unexploredMove},
@@ -203,10 +203,10 @@ func TestDecisionBackup(t *testing.T) {
 			visits:  0,
 		}
 
-		got := node.Backup("player1")
+		got := node.Backup("player1", Win)
 
 		require.Nil(t, got, "Should return no parent")
-		require.Equal(t, WIN, node.rewards, "Should apply a win reward")
+		require.Equal(t, Win, node.rewards, "Should apply a win reward")
 		require.Equal(t, 1.0, node.visits, "Should add a visit")
 	})
 
@@ -216,14 +216,14 @@ func TestDecisionBackup(t *testing.T) {
 		node := &decision{
 			parent:  parent,
 			player:  "player1",
-			rewards: LOSS,
+			rewards: Loss,
 			visits:  1,
 		}
 
-		got := node.Backup("player1")
+		got := node.Backup("player1", Win)
 
 		require.Equal(t, parent, got, "Should return the parent node")
-		require.Equal(t, WIN, node.rewards, "Should reverse virtual loss and add a win")
+		require.Equal(t, Win, node.rewards, "Should reverse virtual loss and add a win")
 		require.Equal(t, 1.0, node.visits,
 			"Should reverse virtual loss and add a visit")
 	})
@@ -234,14 +234,14 @@ func TestDecisionBackup(t *testing.T) {
 		node := &decision{
 			parent:  parent,
 			player:  "player1",
-			rewards: LOSS,
+			rewards: Loss,
 			visits:  1,
 		}
 
-		got := node.Backup("player1")
+		got := node.Backup("player1", Win)
 
 		require.Equal(t, parent, got, "Should return the parent node")
-		require.Equal(t, WIN, node.rewards, "Should reverse virtual loss and add a win")
+		require.Equal(t, Win, node.rewards, "Should reverse virtual loss and add a win")
 		require.Equal(t, 1.0, node.visits,
 			"Should reverse virtual loss and add a visit")
 	})
@@ -252,14 +252,14 @@ func TestDecisionBackup(t *testing.T) {
 		node := &decision{
 			parent:  parent,
 			player:  "player1",
-			rewards: LOSS,
+			rewards: Loss,
 			visits:  1,
 		}
 
-		got := node.Backup("player2")
+		got := node.Backup("player2", Win)
 
 		require.Equal(t, parent, got, "Should return the parent node")
-		require.Equal(t, LOSS, node.rewards, "Should reverse virtual loss and add a loss")
+		require.Equal(t, Loss, node.rewards, "Should reverse virtual loss and add a loss")
 		require.Equal(t, 1.0, node.visits,
 			"Should reverse virtual loss and add a visit")
 	})
@@ -270,14 +270,14 @@ func TestDecisionBackup(t *testing.T) {
 		node := &decision{
 			parent:  parent,
 			player:  "player1",
-			rewards: LOSS,
+			rewards: Loss,
 			visits:  1,
 		}
 
-		got := node.Backup("player2")
+		got := node.Backup("player2", Win)
 
 		require.Equal(t, parent, got, "Should return the parent node")
-		require.Equal(t, LOSS, node.rewards, "Should reverse virtual loss and add a loss")
+		require.Equal(t, Loss, node.rewards, "Should reverse virtual loss and add a loss")
 		require.Equal(t, 1.0, node.visits, "Should reverse virtual loss and add a visit")
 	})
 }
@@ -326,7 +326,7 @@ func TestDecisionRaceConditions(t *testing.T) {
 		for i := 0; i < 2; i++ {
 			require.IsType(t, &decision{}, got[i].child,
 				"Child should be a decision node")
-			require.Equal(t, LOSS, got[i].child.(*decision).rewards,
+			require.Equal(t, Loss, got[i].child.(*decision).rewards,
 				"Child should apply a temporary loss")
 			require.Equal(t, 1.0, got[i].child.(*decision).visits,
 				"Child should apply a temporary loss")
@@ -346,7 +346,7 @@ func TestDecisionRaceConditions(t *testing.T) {
 		node := &decision{
 			parent:  parent, // Non-root
 			player:  "player1",
-			rewards: LOSS * 2, // 2 virtual losses
+			rewards: Loss * 2, // 2 virtual losses
 			visits:  2,        // 2 virtual losses
 		}
 
@@ -356,7 +356,7 @@ func TestDecisionRaceConditions(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				got := node.Backup("player1")
+				got := node.Backup("player1", Win)
 				require.Equal(t, parent, got,
 					"Should return the parent node")
 			}()
@@ -364,7 +364,7 @@ func TestDecisionRaceConditions(t *testing.T) {
 		wg.Wait()
 
 		// Verify node stats
-		require.Equal(t, WIN*2, node.rewards,
+		require.Equal(t, Win*2, node.rewards,
 			"Node should reverse virtual losses and add two wins")
 		require.Equal(t, 2.0, node.visits,
 			"Node should reverse virtual losses and add two visits")
@@ -376,7 +376,7 @@ func TestDecisionRaceConditions(t *testing.T) {
 		node := &decision{
 			parent:  parent, // Non-root
 			player:  "player1",
-			rewards: LOSS, // Virtual loss
+			rewards: Loss, // Virtual loss
 			visits:  3,    // Virtual loss
 		}
 		child := &decision{
@@ -406,7 +406,7 @@ func TestDecisionRaceConditions(t *testing.T) {
 		// Goroutine 2: Backup through the node
 		go func() {
 			defer wg.Done()
-			got := node.Backup("player1")
+			got := node.Backup("player1", Win)
 			require.Equal(t, parent, got,
 				"Node should return its parent")
 		}()
@@ -414,12 +414,12 @@ func TestDecisionRaceConditions(t *testing.T) {
 		wg.Wait()
 
 		// Verify final state reflects selection
-		require.Equal(t, LOSS, child.rewards,
+		require.Equal(t, Loss, child.rewards,
 			"Child should apply a temporary loss")
 		require.Equal(t, 2.0, child.visits,
 			"Child should apply a temporary loss")
 		// Verify final state reflects backup
-		require.Equal(t, WIN, node.rewards,
+		require.Equal(t, Win, node.rewards,
 			"Node should reverse virtual loss and add a win")
 		require.Equal(t, 3.0, node.visits,
 			"Node should reverse virtual loss and add a visit")

@@ -765,7 +765,14 @@ func (gs *GameState) calculateTroopsToPlace() {
 
 	// Check for region bonuses
 	for _, region := range gs.Map.Regions {
-		if getRegionOwner(*region, gs.Ownership) == gs.CurrentPlayer {
+		ownsAll := true
+		for _, cantonID := range region.CantonIDs {
+			if gs.Ownership[cantonID] != gs.CurrentPlayer {
+				ownsAll = false
+				break
+			}
+		}
+		if ownsAll {
 			troops += BONUS_TROOPS_REGION
 		}
 	}

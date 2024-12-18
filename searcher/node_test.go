@@ -37,3 +37,7 @@ func (m mockState) Hash() game.StateHash {
 func (m mockState) Winner() string {
 	return ""
 }
+
+func (m mockState) Evaluate() float64 {
+	return 0
+}

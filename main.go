@@ -3,7 +3,7 @@ package main
 import (
 	"risk/communication/client"
 	"risk/communication/server"
-	"risk/gamemaster"
+	"risk/engine"
 	"risk/player"
 	"sync"
 )

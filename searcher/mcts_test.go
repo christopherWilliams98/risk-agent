@@ -53,7 +53,7 @@ func (m mockStateDeterministic) Play(move game.Move) game.State {
 }
 
 func (m mockStateDeterministic) Hash() game.StateHash {
-	return 0 // Not needed for deterministic games
+	return 0 // Not used for these tests
 }
 
 func (m mockStateDeterministic) Winner() string {
@@ -61,6 +61,10 @@ func (m mockStateDeterministic) Winner() string {
 		return "player1" // P1 always wins after 3 moves
 	}
 	return ""
+}
+
+func (m mockStateDeterministic) Evaluate() float64 {
+	return 0 // Not used for these tests
 }
 
 func TestSimulate(t *testing.T) {
@@ -75,12 +79,12 @@ func TestSimulate(t *testing.T) {
 		// 1st episode expands root with M1 to C1
 		expectedRoot := &decision{
 			player:  "player1",
-			rewards: WIN, // Backpropagate a win for P1
+			rewards: Win, // Backpropagate a win for P1
 			visits:  1,
 			children: map[game.Move]Node{
 				move1: &decision{ // Expand with M1 to C1
 					player:  "player1",
-					rewards: WIN,
+					rewards: Win,
 					visits:  1,
 				},
 			},
@@ -97,17 +101,17 @@ func TestSimulate(t *testing.T) {
 		// 2nd episode expands root with M2 to C2
 		expectedRoot := &decision{
 			player:  "player1",
-			rewards: WIN * 2, // Backpropagate 2 wins for P1
+			rewards: Win * 2, // Backpropagate 2 wins for P1
 			visits:  2,
 			children: map[game.Move]Node{
 				move1: &decision{
 					player:  "player1",
-					rewards: WIN,
+					rewards: Win,
 					visits:  1,
 				},
 				move2: &decision{ // Expand with M2 to C2
 					player:  "player2",
-					rewards: LOSS,
+					rewards: Loss,
 					visits:  1,
 				},
 			},
@@ -127,46 +131,46 @@ func TestSimulate(t *testing.T) {
 		// C2: rewards=LOSS, visits=1, parent_visits=2, score = 1 + sqrt(2ln(2))
 		expectedRoot1 := &decision{
 			player:  "player1",
-			rewards: WIN * 3, // Backpropagate 3 wins for P1
+			rewards: Win * 3, // Backpropagate 3 wins for P1
 			visits:  3,
 			children: map[game.Move]Node{
 				move1: &decision{ // Select C1
 					player:  "player1",
-					rewards: WIN * 2,
+					rewards: Win * 2,
 					visits:  2,
 					children: map[game.Move]Node{
 						move1: &decision{ // Expand C1 with M1 again
 							player:  "player1",
-							rewards: WIN,
+							rewards: Win,
 							visits:  1,
 						},
 					},
 				},
 				move2: &decision{
 					player:  "player2",
-					rewards: LOSS,
+					rewards: Loss,
 					visits:  1,
 				},
 			},
 		}
 		expectedRoot2 := &decision{
 			player:  "player1",
-			rewards: WIN * 3,
+			rewards: Win * 3,
 			visits:  3,
 			children: map[game.Move]Node{
 				move1: &decision{
 					player:  "player1",
-					rewards: WIN,
+					rewards: Win,
 					visits:  1,
 				},
 				move2: &decision{ // Select C2
 					player:  "player2",
-					rewards: LOSS * 2,
+					rewards: Loss * 2,
 					visits:  2,
 					children: map[game.Move]Node{
 						move1: &decision{ // Expand C2 with M1
 							player:  "player1",
-							rewards: WIN,
+							rewards: Win,
 							visits:  1,
 						},
 					},
@@ -200,29 +204,29 @@ func TestSimulate(t *testing.T) {
 			"Should explore M1 twice and M2 twice")
 		expectedRoot := &decision{
 			player:  "player1",
-			rewards: WIN * 4, // Backpropagate 4 wins for P1
+			rewards: Win * 4, // Backpropagate 4 wins for P1
 			visits:  4,
 			children: map[game.Move]Node{
 				move1: &decision{
 					player:  "player1",
-					rewards: WIN * 2,
+					rewards: Win * 2,
 					visits:  2,
 					children: map[game.Move]Node{
 						move1: &decision{
 							player:  "player1",
-							rewards: WIN,
+							rewards: Win,
 							visits:  1,
 						},
 					},
 				},
 				move2: &decision{
 					player:  "player2",
-					rewards: LOSS * 2,
+					rewards: Loss * 2,
 					visits:  2,
 					children: map[game.Move]Node{
 						move1: &decision{
 							player:  "player1",
-							rewards: WIN,
+							rewards: Win,
 							visits:  1,
 						},
 					},
@@ -248,29 +252,29 @@ func TestSimulateParallel(t *testing.T) {
 	// - Rewards should reflect wins/losses correctly
 	expectedRoot := &decision{
 		player:  "player1",
-		rewards: WIN * 4,
+		rewards: Win * 4,
 		visits:  4,
 		children: map[game.Move]Node{
 			move1: &decision{
 				player:  "player1",
-				rewards: WIN * 2,
+				rewards: Win * 2,
 				visits:  2,
 				children: map[game.Move]Node{
 					move1: &decision{
 						player:  "player1",
-						rewards: WIN,
+						rewards: Win,
 						visits:  1,
 					},
 				},
 			},
 			move2: &decision{
 				player:  "player2",
-				rewards: LOSS * 2,
+				rewards: Loss * 2,
 				visits:  2,
 				children: map[game.Move]Node{
 					move1: &decision{
 						player:  "player1",
-						rewards: WIN,
+						rewards: Win,
 						visits:  1,
 					},
 				},
@@ -315,7 +319,7 @@ func (m mockStateTerminal) Play(move game.Move) game.State {
 }
 
 func (m mockStateTerminal) Hash() game.StateHash {
-	return 0 // Not needed for these tests
+	return 0 // Not used for these tests
 }
 
 func (m mockStateTerminal) Winner() string {
@@ -323,6 +327,10 @@ func (m mockStateTerminal) Winner() string {
 		return m.player
 	}
 	return ""
+}
+
+func (m mockStateTerminal) Evaluate() float64 {
+	return 0 // Not used for these tests
 }
 
 func TestSimulateTerminal(t *testing.T) {
@@ -337,12 +345,12 @@ func TestSimulateTerminal(t *testing.T) {
 		// First episode expands to terminal state
 		expectedRoot := &decision{
 			player:  "player1",
-			rewards: WIN,
+			rewards: Win,
 			visits:  1,
 			children: map[game.Move]Node{
 				move: &decision{
 					player:  "player1",
-					rewards: WIN,
+					rewards: Win,
 					visits:  1,
 				},
 			},
@@ -362,12 +370,12 @@ func TestSimulateTerminal(t *testing.T) {
 		// Second episode selects terminal state and does not expand
 		expectedRoot := &decision{
 			player:  "player1",
-			rewards: WIN * 2,
+			rewards: Win * 2,
 			visits:  2,
 			children: map[game.Move]Node{
 				move: &decision{
 					player:  "player1",
-					rewards: WIN * 2,
+					rewards: Win * 2,
 					visits:  2,
 				},
 			},
@@ -387,12 +395,12 @@ func TestSimulateTerminal(t *testing.T) {
 		// Third episode selects terminal state again and does not expand
 		expectedRoot := &decision{
 			player:  "player1",
-			rewards: WIN * 3,
+			rewards: Win * 3,
 			visits:  3,
 			children: map[game.Move]Node{
 				move: &decision{
 					player:  "player1",
-					rewards: WIN * 3,
+					rewards: Win * 3,
 					visits:  3,
 				},
 			},
@@ -417,12 +425,12 @@ func TestSimulateTerminalParallel(t *testing.T) {
 	// - Rewards should reflect wins/losses correctly
 	expectedRoot := &decision{
 		player:  "player1",
-		rewards: WIN * 3,
+		rewards: Win * 3,
 		visits:  3,
 		children: map[game.Move]Node{
 			move: &decision{
 				player:  "player1",
-				rewards: WIN * 3,
+				rewards: Win * 3,
 				visits:  3,
 			},
 		},
@@ -520,6 +528,10 @@ func (m mockStateStochastic) Winner() string {
 	return ""
 }
 
+func (m mockStateStochastic) Evaluate() float64 {
+	return 0 // Not used for these tests
+}
+
 func TestSimulateStochastic(t *testing.T) {
 	move1 := mockMove{id: 1, stochastic: true}
 	move2 := mockMove{id: 2}
@@ -537,12 +549,12 @@ func TestSimulateStochastic(t *testing.T) {
 		// First episode expands root with M1 to chance node and uses S1 for rollout
 		expectedRoot := &decision{
 			player:  "player1",
-			rewards: WIN,
+			rewards: Win,
 			visits:  1,
 			children: map[game.Move]Node{
 				move1: &chance{
 					player:   "player1",
-					rewards:  WIN,
+					rewards:  Win,
 					visits:   1,
 					children: []*decision{}, // No outcomes yet
 				},
@@ -566,18 +578,18 @@ func TestSimulateStochastic(t *testing.T) {
 		// Second episode expands root with M2 to S2
 		expectedRoot := &decision{
 			player:  "player1",
-			rewards: WIN + LOSS,
+			rewards: Win + Loss,
 			visits:  2,
 			children: map[game.Move]Node{
 				move1: &chance{
 					player:   "player1",
-					rewards:  WIN,
+					rewards:  Win,
 					visits:   1,
 					children: []*decision{}, // No outcomes yet
 				},
 				move2: &decision{ // S2
 					player:  "player2",
-					rewards: WIN,
+					rewards: Win,
 					visits:  1,
 				},
 			},
@@ -603,24 +615,24 @@ func TestSimulateStochastic(t *testing.T) {
 		// Third episode expands chance node with outcome S3
 		expectedRoot := &decision{
 			player:  "player1",
-			rewards: WIN + LOSS*2,
+			rewards: Win + Loss*2,
 			visits:  3,
 			children: map[game.Move]Node{
 				move1: &chance{
 					player:  "player1",
-					rewards: WIN + LOSS,
+					rewards: Win + Loss,
 					visits:  2,
 					children: []*decision{
 						{ // Outcome S3
 							player:  "player2",
-							rewards: WIN,
+							rewards: Win,
 							visits:  1,
 						},
 					},
 				},
 				move2: &decision{ // S2
 					player:  "player2",
-					rewards: WIN,
+					rewards: Win,
 					visits:  1,
 				},
 			},
@@ -645,29 +657,29 @@ func TestSimulateStochastic(t *testing.T) {
 		// Fourth episode expands chance node with outcome S1
 		expectedRoot := &decision{
 			player:  "player1",
-			rewards: WIN*2 + LOSS*2,
+			rewards: Win*2 + Loss*2,
 			visits:  4,
 			children: map[game.Move]Node{
 				move1: &chance{
 					player:  "player1",
-					rewards: WIN*2 + LOSS,
+					rewards: Win*2 + Loss,
 					visits:  3,
 					children: []*decision{
 						{ // Outcome S3
 							player:  "player2",
-							rewards: WIN,
+							rewards: Win,
 							visits:  1,
 						},
 						{ // Outcome S1
 							player:  "player1",
-							rewards: WIN,
+							rewards: Win,
 							visits:  1,
 						},
 					},
 				},
 				move2: &decision{ // S2
 					player:  "player2",
-					rewards: WIN,
+					rewards: Win,
 					visits:  1,
 				},
 			},
@@ -692,36 +704,36 @@ func TestSimulateStochastic(t *testing.T) {
 		// Fifth episode selects outcome S1 and expands it with M3
 		expectedRoot := &decision{
 			player:  "player1",
-			rewards: WIN*2 + LOSS*3,
+			rewards: Win*2 + Loss*3,
 			visits:  5,
 			children: map[game.Move]Node{
 				move1: &chance{
 					player:  "player1",
-					rewards: WIN*2 + LOSS*2,
+					rewards: Win*2 + Loss*2,
 					visits:  4,
 					children: []*decision{
 						{ // Outcome S3
 							player:  "player2",
-							rewards: WIN * 2,
+							rewards: Win * 2,
 							visits:  2,
 							children: map[game.Move]Node{
 								move3: &decision{ // Expanded by M3
 									player:  "player2",
-									rewards: WIN,
+									rewards: Win,
 									visits:  1,
 								},
 							},
 						},
 						{ // Outcome S1
 							player:  "player1",
-							rewards: WIN,
+							rewards: Win,
 							visits:  1,
 						},
 					},
 				},
 				move2: &decision{ // S2
 					player:  "player2",
-					rewards: WIN,
+					rewards: Win,
 					visits:  1,
 				},
 			},
@@ -756,36 +768,36 @@ func TestSimulateStochasticParallel(t *testing.T) {
 	// - Rewards should reflect wins/losses correctly
 	expectedRoot := &decision{
 		player:  "player1",
-		rewards: WIN*2 + LOSS*3,
+		rewards: Win*2 + Loss*3,
 		visits:  5,
 		children: map[game.Move]Node{
 			move1: &chance{
 				player:  "player1",
-				rewards: WIN*2 + LOSS*2,
+				rewards: Win*2 + Loss*2,
 				visits:  4,
 				children: []*decision{
 					{ // Outcome S3
 						player:  "player2",
-						rewards: WIN * 2,
+						rewards: Win * 2,
 						visits:  2,
 						children: map[game.Move]Node{
 							move3: &decision{
 								player:  "player2",
-								rewards: WIN,
+								rewards: Win,
 								visits:  1,
 							},
 						},
 					},
 					{ // Outcome S1
 						player:  "player1",
-						rewards: WIN,
+						rewards: Win,
 						visits:  1,
 					},
 				},
 			},
 			move2: &decision{ // S2
 				player:  "player2",
-				rewards: WIN,
+				rewards: Win,
 				visits:  1,
 			},
 		},

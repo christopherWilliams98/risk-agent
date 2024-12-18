@@ -2,8 +2,8 @@ package main
 
 import (
 	"fmt"
+	"risk/engine"
 	"risk/game"
-	"risk/gamemaster"
 )
 
 func main() {

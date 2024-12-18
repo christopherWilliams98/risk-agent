@@ -115,7 +115,7 @@ func (d *decision) applyLoss() {
 	d.Lock()
 	defer d.Unlock()
 
-	d.rewards += LOSS
+	d.rewards += Loss
 	d.visits++
 }
 
@@ -126,7 +126,7 @@ func (d *decision) stats() (player string, rewards float64, visits float64) {
 	return d.player, d.rewards, d.visits
 }
 
-func (d *decision) Backup(winner string) Node {
+func (d *decision) Backup(player string, score float64) Node {
 	d.Lock()
 	defer d.Unlock()
 
@@ -134,14 +134,14 @@ func (d *decision) Backup(winner string) Node {
 		d.reverseLoss()
 	}
 
-	d.rewards += computeReward(winner, d.player)
+	d.rewards += computeReward(player, score, d.player)
 	d.visits++
 
 	return d.parent
 }
 
 func (d *decision) reverseLoss() {
-	d.rewards -= LOSS
+	d.rewards -= Loss
 	d.visits--
 }
 
