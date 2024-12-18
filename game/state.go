@@ -821,62 +821,6 @@ func (gs *GameState) AssignTerritoriesEqually(numPlayers, troopsPerTerritory int
 	}
 }
 
-// Evaluate returns a score between -1 and 1 indicating how favorable the
-// current player's position is to a winning (positive) outcome.
 func (gs *GameState) Evaluate() float64 {
-	// Tally controlled territories, troops, and regions for each player
-	territories := make(map[int]float64)
-	troops := make(map[int]float64)
-	regions := make(map[int]float64)
-
-	// Tally territories and troops
-	for cantonID, owner := range gs.Ownership {
-		if owner > 0 { // Skip unowned (-1)
-			territories[owner]++
-			troops[owner] += float64(gs.TroopCounts[cantonID])
-		}
-	}
-
-	// Tally regions weighted by their troops bonus
-	for _, region := range gs.Map.Regions {
-		owner := getRegionOwner(*region, gs.Ownership)
-		if owner > 0 {
-			regions[owner] += float64(region.Bonus)
-		}
-	}
-
-	// Calculate relative scores from current player's perspective
-	current := gs.CurrentPlayer
-	opponent := gs.NextPlayer()
-
-	territoryScore := normalize(territories[current], territories[opponent])
-	troopScore := normalize(troops[current], troops[opponent])
-	regionScore := normalize(regions[current], regions[opponent])
-
-	// Weighted combination (equal weights for now)
-	return (territoryScore + troopScore + regionScore) / 3.0
-}
-
-// normalize converts two values into a single score between -1 and 1
-func normalize(value float64, otherValue float64) float64 {
-	total := value + otherValue
-	if total == 0 {
-		return 0
-	}
-	// [a/(a+b)-0.5]*2 = (a-b)/(a+b)
-	return (value - otherValue) / total
-}
-
-// getRegionOwner returns the player ID who owns all territories in the region, or -1 if split
-func getRegionOwner(region Region, ownerByCanton []int) int {
-	if len(region.CantonIDs) == 0 {
-		return -1
-	}
-	owner := ownerByCanton[region.CantonIDs[0]]
-	for _, cantonID := range region.CantonIDs[1:] {
-		if ownerByCanton[cantonID] != owner {
-			return -1
-		}
-	}
-	return owner
+	return gs.evaluateBasic()
 }
