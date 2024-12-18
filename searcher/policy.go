@@ -6,6 +6,8 @@ import "math"
 
 const CSquared = 2.0 // Exploration constant
 
+const MaxCutoff = 10000 // Maximum rollout depth in moves
+
 const WIN = 1.0   // Reward for winning outcome
 const LOSS = -WIN // Reward for loss outcome (negate from opponent perspective)
 

@@ -20,4 +20,5 @@ type State interface {
 	Play(Move) State
 	Hash() StateHash
 	Winner() string
+	Evaluate() float64
 }

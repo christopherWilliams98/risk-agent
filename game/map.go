@@ -12,6 +12,7 @@ type Region struct {
 	ID        int    // Unique identifier for the region
 	Name      string // Name of the region
 	CantonIDs []int  // IDs of cantons in this region
+	Bonus     int    // Add bonus troops per turn for controlling this region
 }
 
 // Map represents the game map, containing all the cantons and regions.

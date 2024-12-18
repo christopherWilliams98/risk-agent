@@ -4,6 +4,6 @@ type Rules interface {
 	MaxAttackTroops() int
 	MaxDefendTroops() int
 	DetermineAttackOutcome(attackerRolls, defenderRolls []int) (attackerLosses, defenderLosses int)
-	IsAttackSuccessful(attackerRolls, defenderRolls []int) bool
+	GetRegionBonus(regionID int) int
 	// TODO add more ruels
 }
