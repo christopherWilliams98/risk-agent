@@ -72,7 +72,8 @@ func (sc *ServerCommunicator) GetGameState() *game.GameState {
 	if sc.gameState == nil {
 		return nil
 	}
-	return sc.gameState.Copy()
+	gsCopy := sc.gameState.Copy()
+	return &gsCopy
 }
 
 func (sc *ServerCommunicator) UpdateGameState(gs *game.GameState) {

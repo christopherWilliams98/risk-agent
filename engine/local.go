@@ -24,15 +24,6 @@ func LocalEngine(players []string, agents []Agent, m *game.Map, r game.Rules) *E
 
 	state := game.NewGameState(m, r)
 
-	// For a 2-player game, numPlayers=2, troopsPerTerritory=1
-	state.AssignTerritoriesEqually(len(players), 1)
-
-	state.PlayerTroops = map[int]int{
-		1: 27, // leftover troops for Player1
-		2: 27, // "" for Player2 ""
-	}
-
-	state.Phase = game.InitialPlacementPhase
 	state.CurrentPlayer = 1
 
 	eng := &Engine{

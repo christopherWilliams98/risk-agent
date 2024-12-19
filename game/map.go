@@ -68,6 +68,10 @@ func CreateMap() *Map {
 		}
 	}
 
+	m.Regions[1].Bonus = 3
+	m.Regions[2].Bonus = 2
+	m.Regions[3].Bonus = 1
+
 	// Initialize cantons
 	for id, abbrev := range cantonAbbreviations {
 		regionID := 2 // default to German region

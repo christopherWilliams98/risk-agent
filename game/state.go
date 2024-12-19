@@ -11,8 +11,7 @@ import (
 type Phase int
 
 const (
-	InitialPlacementPhase Phase = iota
-	ReinforcementPhase
+	ReinforcementPhase Phase = iota
 	AttackPhase
 	ManeuverPhase
 	EndPhase
@@ -46,35 +45,54 @@ func NewGameState(m *Map, rules Rules) *GameState {
 		Ownership:   make([]int, numCantons),
 		Rules:       rules,
 	}
-	// Initialize all cantons unowned (-1)
+
+	// Initialize all cantons to unowned
 	for i := range gs.Ownership {
 		gs.Ownership[i] = -1
 	}
+
+	numPlayers := 2
+	STARTING_UNITS := 1 // or any other number
+
+	cantonIDs := make([]int, numCantons)
+	for i := 0; i < numCantons; i++ {
+		cantonIDs[i] = i
+	}
+	rand.Shuffle(numCantons, func(i, j int) {
+		cantonIDs[i], cantonIDs[j] = cantonIDs[j], cantonIDs[i]
+	})
+
+	// Assign territories in round-robin fashion to players as per Jean's code
+	for i, cid := range cantonIDs {
+		ownerID := (i % numPlayers) + 1
+		gs.Ownership[cid] = ownerID
+		gs.TroopCounts[cid] = STARTING_UNITS
+	}
+
 	gs.InitCards()
 	gs.CurrentPlayer = 1
-	gs.PlayerHands = make([][]RiskCard, 3) // 2player
+	gs.PlayerHands = make([][]RiskCard, 3)
 	gs.PlayerHands[1] = []RiskCard{}
 	gs.PlayerHands[2] = []RiskCard{}
+
+	gs.Phase = ReinforcementPhase
+	gs.calculateTroopsToPlace()
 
 	return gs
 }
 
-func (gs GameState) Copy() *GameState {
-	// Copy troop counts
+func (gs GameState) Copy() GameState {
 	troopCountsCopy := make([]int, len(gs.TroopCounts))
 	copy(troopCountsCopy, gs.TroopCounts)
 
-	// Copy ownership
 	ownershipCopy := make([]int, len(gs.Ownership))
 	copy(ownershipCopy, gs.Ownership)
 
-	// Deep copy PlayerTroops
 	playerTroopsCopy := make(map[int]int)
-	for key, value := range gs.PlayerTroops {
-		playerTroopsCopy[key] = value
+	for k, v := range gs.PlayerTroops {
+		playerTroopsCopy[k] = v
 	}
 
-	// Deep copy PlayerHands
 	playerHandsCopy := make([][]RiskCard, len(gs.PlayerHands))
 	for i, hand := range gs.PlayerHands {
 		handCopy := make([]RiskCard, len(hand))
@@ -82,20 +100,19 @@ func (gs GameState) Copy() *GameState {
 		playerHandsCopy[i] = handCopy
 	}
 
-	// Deep copy Cards and DiscardedCards if necessary
 	cardsCopy := make([]RiskCard, len(gs.Cards))
 	copy(cardsCopy, gs.Cards)
 
 	discardedCardsCopy := make([]RiskCard, len(gs.DiscardedCards))
 	copy(discardedCardsCopy, gs.DiscardedCards)
 
-	return &GameState{
-		Map:               gs.Map, // Assuming Map is immutable
+	return GameState{
+		Map:               gs.Map,
 		TroopCounts:       troopCountsCopy,
 		Ownership:         ownershipCopy,
-		Rules:             gs.Rules, // Assuming Rules is immutable
+		Rules:             gs.Rules,
 		CurrentPlayer:     gs.CurrentPlayer,
-		LastMove:          gs.LastMove, // Assuming Move is immutable or handled appropriately
+		LastMove:          gs.LastMove,
 		Phase:             gs.Phase,
 		PlayerTroops:      playerTroopsCopy,
 		TroopsToPlace:     gs.TroopsToPlace,
@@ -108,7 +125,7 @@ func (gs GameState) Copy() *GameState {
 	}
 }
 
-func (gs *GameState) InitCards() {
+func (gs GameState) InitCards() {
 	types := []CardType{Infantry, Cavalry, Artillery}
 	tIndex := 0
 	for i := 0; i < 24; i++ {
@@ -125,7 +142,7 @@ func (gs *GameState) InitCards() {
 	})
 }
 
-func (gs *GameState) DrawCard() (RiskCard, bool) {
+func (gs GameState) DrawCard() (RiskCard, bool) {
 	if len(gs.Cards) == 0 {
 		// If no cards left, reshuffle discarded into deck
 		if len(gs.DiscardedCards) == 0 {
@@ -143,7 +160,7 @@ func (gs *GameState) DrawCard() (RiskCard, bool) {
 	return card, true
 }
 
-func (gs *GameState) AwardCardIfEligible() {
+func (gs GameState) AwardCardIfEligible() {
 	if gs.ConqueredThisTurn {
 		card, ok := gs.DrawCard()
 		if ok {
@@ -177,7 +194,7 @@ func (gs *GameState) HandleCardTrading() {
 // 1) Three of a kind (Infantry, Infantry, Infantry OR Cavalry, Cavalry, Cavalry OR Artillery, Artillery, Artillery)
 // 2) One of each (Infantry, Cavalry, Artillery)
 // 3) Any two plus a Wild
-func (gs *GameState) FindSet(hand []RiskCard) []int {
+func (gs GameState) FindSet(hand []RiskCard) []int {
 	n := len(hand)
 	// Count types
 	countType := map[CardType][]int{} // type -> indices
@@ -226,7 +243,7 @@ func (gs *GameState) FindSet(hand []RiskCard) []int {
 }
 
 // Trade in a given set of cards, remove from hand, put into discard, increment gs.Exchanges, and give armies.
-func (gs *GameState) TradeInSet(hand []RiskCard, setIndices []int) []RiskCard {
+func (gs GameState) TradeInSet(hand []RiskCard, setIndices []int) []RiskCard {
 	playerID := gs.CurrentPlayer
 	// Extract the cards
 	var set []RiskCard
@@ -294,22 +311,6 @@ func (gs *GameState) ArmiesForThisExchange(exchangeNumber int) int {
 // LegalMoves returns all legal moves for the current player.
 func (gs GameState) LegalMoves() []Move {
 	switch gs.Phase {
-	case InitialPlacementPhase:
-		// Generate legal initial placement moves
-		moves := []Move{}
-		if gs.PlayerTroops[gs.CurrentPlayer] > 0 {
-			// Player can place 1 troop on any territory they own // TODO change to mutable value in rules / meta file
-			for cid, owner := range gs.Ownership {
-				if owner == gs.CurrentPlayer {
-					moves = append(moves, &GameMove{
-						ActionType: ReinforceAction,
-						ToCantonID: cid,
-						NumTroops:  1,
-					})
-				}
-			} // TODO REFACTOR THIS
-		}
-		return moves
 	case ReinforcementPhase:
 		return gs.reinforcementMoves()
 	case AttackPhase:
@@ -322,7 +323,7 @@ func (gs GameState) LegalMoves() []Move {
 }
 
 // reinforcementMoves generates all possible reinforcement moves for the current player.
-func (gs *GameState) reinforcementMoves() []Move {
+func (gs GameState) reinforcementMoves() []Move {
 	var moves []Move
 	remainingTroops := gs.TroopsToPlace
 
@@ -346,7 +347,7 @@ func (gs *GameState) reinforcementMoves() []Move {
 	return moves
 }
 
-func (gs *GameState) attackMoves() []Move {
+func (gs GameState) attackMoves() []Move {
 	var moves []Move
 
 	for cantonID, owner := range gs.Ownership {
@@ -371,7 +372,7 @@ func (gs *GameState) attackMoves() []Move {
 	return moves
 }
 
-func (gs *GameState) getPlayerTerritoriesWithTroops() []int {
+func (gs GameState) getPlayerTerritoriesWithTroops() []int {
 	var territories []int
 	for cantonID, owner := range gs.Ownership {
 		if owner == gs.CurrentPlayer && gs.TroopCounts[cantonID] > 1 {
@@ -381,7 +382,7 @@ func (gs *GameState) getPlayerTerritoriesWithTroops() []int {
 	return territories
 }
 
-func (gs *GameState) getPlayerOwnedTerritories() []int {
+func (gs GameState) getPlayerOwnedTerritories() []int {
 	var territories []int
 	for cantonID, owner := range gs.Ownership {
 		if owner == gs.CurrentPlayer {
@@ -392,7 +393,7 @@ func (gs *GameState) getPlayerOwnedTerritories() []int {
 }
 
 // maneuverMoves generates all possible maneuver moves for the current player.
-func (gs *GameState) maneuverMoves() []Move {
+func (gs GameState) maneuverMoves() []Move {
 	var moves []Move
 
 	fromTerritories := gs.getPlayerTerritoriesWithTroops()
@@ -429,7 +430,7 @@ func (gs *GameState) maneuverMoves() []Move {
 }
 
 // MoveTroops transfers troops between two cantons owned by the same player.
-func (gs *GameState) MoveTroops(fromCantonID, toCantonID, numTroops int) error {
+func (gs GameState) MoveTroops(fromCantonID, toCantonID, numTroops int) error {
 	playerID := gs.Ownership[fromCantonID]
 
 	// Check ownership
@@ -450,7 +451,7 @@ func (gs *GameState) MoveTroops(fromCantonID, toCantonID, numTroops int) error {
 	return nil
 }
 
-func (gs *GameState) Attack(attackerID, defenderID int) error {
+func (gs GameState) Attack(attackerID, defenderID int) error {
 	// Check ownership and adjacency
 	if gs.Ownership[attackerID] == gs.Ownership[defenderID] {
 		return fmt.Errorf("cannot attack: target canton is owned by the same player")
@@ -533,7 +534,7 @@ func (gs GameState) Player() string {
 }
 
 // AreAdjacent checks if two cantons are adjacent on the map.
-func (gs *GameState) AreAdjacent(cantonID1, cantonID2 int) bool {
+func (gs GameState) AreAdjacent(cantonID1, cantonID2 int) bool {
 	for _, adjID := range gs.Map.Cantons[cantonID1].AdjacentIDs {
 		if adjID == cantonID2 {
 			return true
@@ -574,7 +575,7 @@ func (gs GameState) Hash() StateHash {
 }
 
 // Just BFS
-func (gs *GameState) AreConnected(fromID, toID, playerID int) bool {
+func (gs GameState) AreConnected(fromID, toID, playerID int) bool {
 	if fromID == toID {
 		return true
 	}
@@ -610,40 +611,6 @@ func (gs GameState) Play(move Move) State {
 	gameMove := move.(*GameMove)
 
 	switch gs.Phase {
-
-	case InitialPlacementPhase:
-		if gameMove.ActionType == ReinforceAction {
-			// Place the troops
-			newGs.TroopCounts[gameMove.ToCantonID] += gameMove.NumTroops
-			newGs.PlayerTroops[newGs.CurrentPlayer] -= gameMove.NumTroops
-
-			// Check if the current player has finished placing all their initial troops
-			if newGs.PlayerTroops[newGs.CurrentPlayer] == 0 {
-				// Check if all players have finished placing their initial troops
-				allDone := true
-				for _, troops := range newGs.PlayerTroops {
-					if troops > 0 {
-						allDone = false
-						break
-					}
-				}
-				if allDone {
-					// All players done with initial placement
-					// Move to the ReinforcementPhase
-					newGs.Phase = ReinforcementPhase
-					newGs.calculateTroopsToPlace()
-				} else {
-					// Not all done, move to the next player who still has troops left
-					newGs.CurrentPlayer = newGs.NextPlayer()
-				}
-			} else {
-
-				newGs.CurrentPlayer = newGs.NextPlayer()
-			}
-		} else {
-			panic("Invalid action for InitialPlacementPhase")
-		}
-
 	case ReinforcementPhase:
 		if gameMove.ActionType == ReinforceAction {
 			// Apply reinforcement move
@@ -705,19 +672,12 @@ func (gs GameState) Play(move Move) State {
 	// Check for winner
 	newGs.Won = newGs.CheckWinner()
 
-	return newGs
+	return &newGs
 }
 
 // advancePhase moves the game to the next phase or next player's turn.
-func (gs *GameState) AdvancePhase() {
+func (gs GameState) AdvancePhase() {
 	switch gs.Phase {
-	case InitialPlacementPhase:
-		gs.CurrentPlayer = gs.NextPlayer()
-		if gs.PlayerTroops[1] == 0 && gs.PlayerTroops[2] == 0 {
-			gs.Phase = ReinforcementPhase
-			gs.HandleCardTrading()
-			gs.calculateTroopsToPlace()
-		}
 	case ReinforcementPhase:
 		gs.Phase = AttackPhase
 	case AttackPhase:
@@ -731,7 +691,7 @@ func (gs *GameState) AdvancePhase() {
 	}
 }
 
-func (gs *GameState) getEnemyAdjacentTerritories() []int {
+func (gs GameState) getEnemyAdjacentTerritories() []int {
 	territoriesSet := make(map[int]struct{})
 	for cantonID, owner := range gs.Ownership {
 		if owner == gs.CurrentPlayer {
@@ -751,7 +711,7 @@ func (gs *GameState) getEnemyAdjacentTerritories() []int {
 }
 
 // calculateTroopsToPlace calculates the number of troops the current player should place.
-func (gs *GameState) calculateTroopsToPlace() {
+func (gs GameState) calculateTroopsToPlace() {
 	numTerritories := 0
 	troops := 0
 
@@ -773,13 +733,13 @@ func (gs *GameState) calculateTroopsToPlace() {
 			}
 		}
 		if ownsAll {
-			troops += BONUS_TROOPS_REGION
+			troops += region.Bonus
 		}
 	}
 	gs.TroopsToPlace = troops
 }
 
-func (gs *GameState) NextPlayer() int {
+func (gs GameState) NextPlayer() int {
 	if gs.CurrentPlayer == 1 {
 		return 2
 	}
@@ -812,7 +772,7 @@ func (gs GameState) CheckWinner() string {
 }
 
 // assigning `troopsPerTerritory` troops to each territory.
-func (gs *GameState) AssignTerritoriesEqually(numPlayers, troopsPerTerritory int) {
+func (gs GameState) AssignTerritoriesEqually(numPlayers, troopsPerTerritory int) {
 	totalTerritories := len(gs.Map.Cantons)
 	for id := 0; id < totalTerritories; id++ {
 		playerID := (id % numPlayers) + 1 // 1,2,1,2,...
@@ -821,6 +781,6 @@ func (gs *GameState) AssignTerritoriesEqually(numPlayers, troopsPerTerritory int
 	}
 }
 
-func (gs *GameState) Evaluate() float64 {
+func (gs GameState) Evaluate() float64 {
 	return gs.evaluateBasic()
 }
