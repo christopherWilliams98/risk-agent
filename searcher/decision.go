@@ -1,6 +1,7 @@
 package searcher
 
 import (
+	"fmt"
 	"math"
 	"risk/game"
 	"sync"
@@ -48,17 +49,24 @@ func (d *decision) SelectOrExpand(state game.State) (Node, game.State, bool) {
 	d.Lock()
 	defer d.Unlock()
 
-	if len(d.moves) == 0 && len(d.children) == 0 { // Terminal Node
+	if len(d.moves) == 0 && len(d.children) == 0 {
+		// Terminal
 		return d, state, false
 	}
 
 	var child Node
 	selected := false
-	if len(d.moves) > 0 { // Expand Node with an unexplored move
+	if len(d.moves) > 0 {
 		child, state = d.expands(state)
-	} else { // Select a child of fully expanded Node
+	} else {
 		child, state = d.selects(state)
 		selected = true
+	}
+
+	if child == d {
+		// Means we “skipped” the move => do NOT call child.applyLoss()
+		// Because that would cause a double lock.
+		return d, state, false
 	}
 
 	child.applyLoss()
@@ -66,19 +74,26 @@ func (d *decision) SelectOrExpand(state game.State) (Node, game.State, bool) {
 }
 
 func (d *decision) expands(state game.State) (Node, game.State) {
+	gs := state.(*game.GameState)
 	move := d.moves[0]
-	state = state.Play(move)
+
+	// If the move is obviously invalid for this phase, skip it:
+	if !game.IsMoveValidForPhase(gs.Phase, move) {
+		fmt.Printf("[MCTS expands] Skipping invalid move: Phase=%d, ActionType=%d\n", gs.Phase, move.(*game.GameMove).ActionType)
+		d.moves = d.moves[1:]
+		return d, state // Return the same node, no child => skip child.applyLoss
+	}
+	newState := state.Play(move)
 
 	var child Node
 	if move.IsStochastic() {
 		child = newChance(d)
 	} else {
-		child = newDecision(d, state)
+		child = newDecision(d, newState)
 	}
-
 	d.children[move] = child
 	d.moves = d.moves[1:]
-	return child, state
+	return child, newState
 }
 
 func (d *decision) selects(state game.State) (Node, game.State) {

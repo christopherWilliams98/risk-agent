@@ -1,53 +1,47 @@
 package main
 
 import (
-	"risk/communication/client"
-	"risk/communication/server"
-	"risk/engine"
-	"risk/player"
-	"sync"
+	"fmt"
+	gamemaster "risk/engine"
+	"risk/game"
+	"risk/searcher"
+	"risk/searcher/agent"
 )
 
-func main2() {
-	// Initialize the ServerCommunicator
-	serverComm := server.NewServerCommunicator()
-	go serverComm.Start()
+func main() {
 
-	// Initialize the GameMaster's ClientCommunicator
-	gmComm := client.NewClientCommunicator("http://localhost:8080")
-	gameMaster := gamemaster.NewGameMaster(gmComm)
+	// Create the map
+	gameMap := game.CreateMap()
 
-	// Initialize Players with ClientCommunicator
-	player1Comm := client.NewClientCommunicator("http://localhost:8080")
-	player2Comm := client.NewClientCommunicator("http://localhost:8080")
+	// Create standard rules
+	rules := game.NewStandardRules()
 
-	player1 := player.NewPlayer(1, player1Comm)
-	player2 := player.NewPlayer(2, player2Comm)
+	// Construct MCTS objects
+	myMCTS := searcher.NewMCTS(
+		1,
+		searcher.WithEpisodes(50),
+		searcher.WithCutoff(50),
+	)
 
-	// Initialize the game state
-	gameMaster.InitializeGame()
+	// agent1 := agent.NewTrainingAgent(myMCTS)
+	// agent2 := agent.NewTrainingAgent(myMCTS)
 
-	// WaitGroup for synchronization
-	var wg sync.WaitGroup
-	wg.Add(3)
+	agent1 := agent.NewEvaluationAgent(myMCTS)
+	agent2 := agent.NewEvaluationAgent(myMCTS)
 
-	// Start GameMaster in a goroutine
-	go func() {
-		defer wg.Done()
-		gameMaster.RunGame()
-	}()
+	// Wrap them into gamemaster.Agent via MCTSAdapter
+	adapter1 := &gamemaster.MCTSAdapter{InternalAgent: agent1}
+	adapter2 := &gamemaster.MCTSAdapter{InternalAgent: agent2}
 
-	// Start players in goroutines
-	go func() {
-		defer wg.Done()
-		player1.Play()
-	}()
+	players := []string{"Player1", "Player2"}
+	agents := []gamemaster.MCTSAdapter{*adapter1, *adapter2}
 
-	go func() {
-		defer wg.Done()
-		player2.Play()
-	}()
+	// Instantiate engine
+	engine := gamemaster.LocalEngine(players, agents, gameMap, rules)
 
-	// Wait for goroutines to finish
-	wg.Wait()
+	// Run the game
+	engine.Run()
+
+	winner := engine.State.Winner()
+	fmt.Printf("Game over! Winner: %s\n", winner)
 }
