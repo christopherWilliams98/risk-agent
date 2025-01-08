@@ -1,20 +1,24 @@
 package gamemaster
 
 import (
+	"fmt"
 	"risk/game"
+	"risk/searcher"
+	"risk/searcher/agent"
 )
 
 type Engine struct {
 	State  *game.GameState
-	Agents []Agent
+	Agents []MCTSAdapter
 }
 
 type Update struct {
-	Move game.Move
-	Hash game.StateHash
+	Move  game.Move
+	State game.State
+	Hash  game.StateHash
 }
 
-func LocalEngine(players []string, agents []Agent, m *game.Map, r game.Rules) *Engine {
+func LocalEngine(players []string, agents []MCTSAdapter, m *game.Map, r game.Rules) *Engine {
 	if len(players) != len(agents) {
 		panic("number of players does not match number of agents")
 	}
@@ -24,15 +28,6 @@ func LocalEngine(players []string, agents []Agent, m *game.Map, r game.Rules) *E
 
 	state := game.NewGameState(m, r)
 
-	// For a 2-player game, numPlayers=2, troopsPerTerritory=1
-	state.AssignTerritoriesEqually(len(players), 1)
-
-	state.PlayerTroops = map[int]int{
-		1: 27, // leftover troops for Player1
-		2: 27, // "" for Player2 ""
-	}
-
-	state.Phase = game.InitialPlacementPhase
 	state.CurrentPlayer = 1
 
 	eng := &Engine{
@@ -50,42 +45,67 @@ func (e *Engine) Run() {
 		updates[i] = []Update{}
 	}
 
-	// while Loop until there's a winner
-	for e.State.Winner() == "" {
+	turnCount := 0
+	maxTurns := 500
+
+	// Loop until there's a winner
+	for e.State.Winner() == "" && turnCount < maxTurns {
 		currentPlayerID := e.State.CurrentPlayer
 		agentIndex := currentPlayerID - 1
 
+		// Debug print
+		fmt.Printf("===== TURN BEGIN: Player %d (agent index %d) =====\n", currentPlayerID, agentIndex)
+
 		move := e.Agents[agentIndex].FindMove(e.State, updates[agentIndex])
+
+		// Debug print
+		fmt.Printf("[Engine.Run] Player %d chose move: %+v\n", currentPlayerID, move)
 
 		newState := e.State.Play(move).(*game.GameState)
 
 		u := Update{
-			Move: move,
-			Hash: newState.Hash(),
+			Move:  move,
+			State: newState.Copy(),
+			Hash:  newState.Hash(),
 		}
 		updates[agentIndex] = append(updates[agentIndex], u)
 
 		e.State = newState
+		fmt.Printf("turn %d\n", turnCount)
+		turnCount++
+
+	}
+
+	if e.State.Winner() != "" {
+		fmt.Printf("Game ended due to a winner: %s\n", e.State.Winner())
+	} else {
+		fmt.Printf("Stopped after %d turns (no winner yet)\n", maxTurns)
 	}
 }
 
-type Agent interface {
-	FindMove(state *game.GameState, recentUpdates []Update) game.Move
+type MCTSAdapter struct {
+	InternalAgent agent.Agent
 }
 
-type MCTSAgent struct {
-	PlayerID int
-}
-
-func NewMCTSAgent(playerID int) *MCTSAgent {
-	return &MCTSAgent{PlayerID: playerID}
-}
-
-// simple implementation - always returns first legal move
-func (mcts *MCTSAgent) FindMove(state *game.GameState, recentUpdates []Update) game.Move {
-	legalMoves := state.LegalMoves()
-	if len(legalMoves) == 0 {
-		panic("No legal moves available - agent stuck")
+func (ma *MCTSAdapter) FindMove(gs *game.GameState, recentUpdates []Update) game.Move {
+	segments := make([]searcher.Segment, len(recentUpdates))
+	for i, upd := range recentUpdates {
+		segments[i] = searcher.Segment{
+			Move:  upd.Move,
+			State: upd.State,
+		}
 	}
-	return legalMoves[0]
+	candidate := ma.InternalAgent.FindMove(gs, segments)
+
+	if !game.IsMoveValidForPhase(gs.Phase, candidate) {
+		fmt.Printf("[MCTSAdapter] MCTS returned an invalid move for Phase=%d => forcing pass.\n",
+			gs.Phase)
+		fallbackMoves := gs.LegalMoves()
+		if len(fallbackMoves) == 0 {
+			panic("No legal moves at all!")
+		}
+		return fallbackMoves[0]
+	}
+
+	return candidate
 }

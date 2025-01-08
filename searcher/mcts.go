@@ -108,20 +108,32 @@ func countdown(goroutines int, duration time.Duration, cutoff int, root Node, st
 }
 
 func (m *MCTS) findSubtree(path []Segment, state game.State) Node {
+	gs := state.(*game.GameState)
+
 	if m.root == nil {
 		return newDecision(nil, state)
 	}
 	if len(path) == 0 {
+		// If root's phase doesn't match the current state's phase, discard it:
+		rootDecision := m.root.(*decision)
+		if rootDecision.phase != gs.Phase {
+			return newDecision(nil, state)
+		}
 		return m.root
 	}
-	// Traverse the search tree by path
-	// TODO: consider extracting to decision.go
+
 	node := m.root.(*decision)
 	for _, segment := range path {
+		// If mismatch in phase, discard
+		if node.phase != gs.Phase {
+			return newDecision(nil, state)
+		}
+
 		child := node.children[segment.Move]
 		if child == nil {
 			return newDecision(nil, state)
 		}
+
 		switch child := child.(type) {
 		case *decision:
 			node = child
@@ -135,6 +147,12 @@ func (m *MCTS) findSubtree(path []Segment, state game.State) Node {
 			panic("Unexpected node type")
 		}
 	}
+
+	// final check
+	if node.phase != gs.Phase {
+		return newDecision(nil, state)
+	}
+
 	// Return the node at the end of the path as the new root
 	node.parent = nil
 	return node

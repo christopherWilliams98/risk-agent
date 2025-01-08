@@ -1,6 +1,7 @@
 package searcher
 
 import (
+	"fmt"
 	"math"
 	"risk/game"
 	"sync"
@@ -13,29 +14,29 @@ type decision struct {
 	moves    []game.Move        // Unexplored
 	children map[game.Move]Node // Explored
 	hash     game.StateHash
+	phase    game.Phase
 	rewards  float64
 	visits   float64
 }
 
 func newDecision(parent Node, state game.State) *decision {
-	// TODO: randomize moves
-	// TODO: prioritize exploring 'pass' moves (in attack and maneuver phases)
-	moves := state.LegalMoves()
+	gs := state.(*game.GameState)
 
-	// Lazily compute state ID
+	moves := gs.LegalMoves()
 	var hash game.StateHash
 	if _, ok := parent.(*chance); ok {
-		hash = state.Hash()
+		hash = gs.Hash()
 	}
 
 	return &decision{
 		parent:   parent,
-		player:   state.Player(),
+		player:   gs.Player(),
 		moves:    moves,
 		children: make(map[game.Move]Node, len(moves)),
 		hash:     hash,
 		rewards:  0,
-		visits:   0,
+		visits:   1,
+		phase:    gs.Phase,
 	}
 }
 
@@ -48,17 +49,24 @@ func (d *decision) SelectOrExpand(state game.State) (Node, game.State, bool) {
 	d.Lock()
 	defer d.Unlock()
 
-	if len(d.moves) == 0 && len(d.children) == 0 { // Terminal Node
+	if len(d.moves) == 0 && len(d.children) == 0 {
+		// Terminal
 		return d, state, false
 	}
 
 	var child Node
 	selected := false
-	if len(d.moves) > 0 { // Expand Node with an unexplored move
+	if len(d.moves) > 0 {
 		child, state = d.expands(state)
-	} else { // Select a child of fully expanded Node
+	} else {
 		child, state = d.selects(state)
 		selected = true
+	}
+
+	if child == d {
+		// Means we “skipped” the move => do NOT call child.applyLoss()
+		// Because that would cause a double lock.
+		return d, state, false
 	}
 
 	child.applyLoss()
@@ -66,19 +74,33 @@ func (d *decision) SelectOrExpand(state game.State) (Node, game.State, bool) {
 }
 
 func (d *decision) expands(state game.State) (Node, game.State) {
+	gs := state.(*game.GameState)
 	move := d.moves[0]
-	state = state.Play(move)
+
+	// If the move is obviously invalid for this phase, skip it:
+	if !game.IsMoveValidForPhase(gs.Phase, move) {
+		fmt.Printf("[MCTS expands] Skipping invalid move: Phase=%d, ActionType=%d\n",
+			gs.Phase, move.(*game.GameMove).ActionType)
+
+		// remove the invalid move from the unexplored moves
+		d.moves = d.moves[1:]
+
+		// Also increment visits to avoid re-selecting the same node
+		d.visits++
+
+		return d, state
+	}
+	newState := state.Play(move)
 
 	var child Node
 	if move.IsStochastic() {
 		child = newChance(d)
 	} else {
-		child = newDecision(d, state)
+		child = newDecision(d, newState)
 	}
-
 	d.children[move] = child
 	d.moves = d.moves[1:]
-	return child, state
+	return child, newState
 }
 
 func (d *decision) selects(state game.State) (Node, game.State) {
