@@ -2,42 +2,44 @@ package main
 
 import (
 	"fmt"
-	"log"
 	gamemaster "risk/engine"
 	"risk/game"
+	"risk/searcher"
 	"risk/searcher/agent"
-	"time"
 )
 
-// run two agent servers on different ports (8080 & 8081).
 func main() {
-	// 1) Start the first agent server in a goroutine
-	go agent.StartAgentServer("8080")
 
-	// 2) Start the second agent server in another goroutine
-	go agent.StartAgentServer("8081")
-
-	// Sleep a tiny bit to ensure servers have started.
-	time.Sleep(1 * time.Second)
-	log.Println("[main] Both agent servers should be up now.")
-
-	// 3) Now create the map, rules, and set up EngineHTTP with agent URLs
+	// Create the map
 	gameMap := game.CreateMap()
-	rules := game.NewStandardRules() // TODO I want more rules
 
-	agentURLs := []string{
-		"http://localhost:8080",
-		"http://localhost:8081",
-	}
+	// Create standard rules
+	rules := game.NewStandardRules()
 
-	engine := gamemaster.LocalEngineHTTP(
-		[]string{"Player1", "Player2"},
-		agentURLs,
-		gameMap,
-		rules,
+	// Construct MCTS objects
+	myMCTS := searcher.NewMCTS(
+		8,
+		searcher.WithEpisodes(100),
+		searcher.WithCutoff(100),
 	)
 
-	// 4) Run the game
+	// agent1 := agent.NewTrainingAgent(myMCTS)
+	// agent2 := agent.NewTrainingAgent(myMCTS)
+
+	agent1 := agent.NewEvaluationAgent(myMCTS)
+	agent2 := agent.NewEvaluationAgent(myMCTS)
+
+	// Wrap them into gamemaster.Agent via MCTSAdapter
+	adapter1 := &gamemaster.MCTSAdapter{InternalAgent: agent1}
+	adapter2 := &gamemaster.MCTSAdapter{InternalAgent: agent2}
+
+	players := []string{"Player1", "Player2"}
+	agents := []gamemaster.MCTSAdapter{*adapter1, *adapter2}
+
+	// Instantiate engine
+	engine := gamemaster.LocalEngine(players, agents, gameMap, rules)
+
+	// Run the game
 	engine.Run()
 
 	winner := engine.State.Winner()

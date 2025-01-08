@@ -1,7 +1,6 @@
 package searcher
 
 import (
-	"encoding/json"
 	"risk/game"
 	"sync"
 	"time"
@@ -12,25 +11,8 @@ import (
 type Option func(mcts *MCTS)
 
 type Segment struct {
-	Move  game.GameMove
+	Move  game.Move
 	State game.State
-}
-
-// Custom struct to help with unmarshaling
-type segmentAlias struct {
-	Move  game.GameMove
-	State game.GameState
-}
-
-// Custom unmarshaler for Segment
-func (s *Segment) UnmarshalJSON(data []byte) error {
-	var alias segmentAlias
-	if err := json.Unmarshal(data, &alias); err != nil {
-		return err
-	}
-	s.Move = alias.Move
-	s.State = &alias.State // Assign GameState pointer to the State interface
-	return nil
 }
 
 type MCTS struct {
@@ -147,7 +129,7 @@ func (m *MCTS) findSubtree(path []Segment, state game.State) Node {
 			return newDecision(nil, state)
 		}
 
-		child := node.children[&segment.Move]
+		child := node.children[segment.Move]
 		if child == nil {
 			return newDecision(nil, state)
 		}
