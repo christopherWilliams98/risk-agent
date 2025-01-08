@@ -1,6 +1,7 @@
 package searcher
 
 import (
+	"encoding/json"
 	"risk/game"
 	"sync"
 	"time"
@@ -11,8 +12,25 @@ import (
 type Option func(mcts *MCTS)
 
 type Segment struct {
-	Move  game.Move
+	Move  game.GameMove
 	State game.State
+}
+
+// Custom struct to help with unmarshaling
+type segmentAlias struct {
+	Move  game.GameMove
+	State game.GameState
+}
+
+// Custom unmarshaler for Segment
+func (s *Segment) UnmarshalJSON(data []byte) error {
+	var alias segmentAlias
+	if err := json.Unmarshal(data, &alias); err != nil {
+		return err
+	}
+	s.Move = alias.Move
+	s.State = &alias.State // Assign GameState pointer to the State interface
+	return nil
 }
 
 type MCTS struct {
@@ -108,20 +126,32 @@ func countdown(goroutines int, duration time.Duration, cutoff int, root Node, st
 }
 
 func (m *MCTS) findSubtree(path []Segment, state game.State) Node {
+	gs := state.(*game.GameState)
+
 	if m.root == nil {
 		return newDecision(nil, state)
 	}
 	if len(path) == 0 {
+		// If root's phase doesn't match the current state's phase, discard it:
+		rootDecision := m.root.(*decision)
+		if rootDecision.phase != gs.Phase {
+			return newDecision(nil, state)
+		}
 		return m.root
 	}
-	// Traverse the search tree by path
-	// TODO: consider extracting to decision.go
+
 	node := m.root.(*decision)
 	for _, segment := range path {
-		child := node.children[segment.Move]
+		// If mismatch in phase, discard
+		if node.phase != gs.Phase {
+			return newDecision(nil, state)
+		}
+
+		child := node.children[&segment.Move]
 		if child == nil {
 			return newDecision(nil, state)
 		}
+
 		switch child := child.(type) {
 		case *decision:
 			node = child
@@ -135,6 +165,12 @@ func (m *MCTS) findSubtree(path []Segment, state game.State) Node {
 			panic("Unexpected node type")
 		}
 	}
+
+	// final check
+	if node.phase != gs.Phase {
+		return newDecision(nil, state)
+	}
+
 	// Return the node at the end of the path as the new root
 	node.parent = nil
 	return node

@@ -11,6 +11,7 @@ type chance struct {
 	player   string
 	children []*decision
 	rewards  float64
+	phase    game.Phase
 	visits   float64
 }
 
@@ -19,7 +20,8 @@ func newChance(parent *decision) *chance {
 		parent:  parent,
 		player:  parent.player,
 		rewards: 0,
-		visits:  0,
+		visits:  1,
+		phase:   parent.phase,
 	}
 }
 

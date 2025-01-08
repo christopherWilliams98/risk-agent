@@ -22,9 +22,9 @@ type GameState struct {
 	Map               *Map         // Reference to the static game map
 	TroopCounts       []int        // Troop counts per canton, indexed by canton ID
 	Ownership         []int        // Owner IDs per canton, indexed by canton ID (-1 indicates unowned)
-	Rules             Rules        // The set of game rules to apply
+	Rules             Rules        `json:"-"` // <-- omit from JSON
 	CurrentPlayer     int          // The current player
-	LastMove          Move         // The last move made (for delta)
+	LastMove          GameMove     `json:"lastMove"`
 	Phase             Phase        // The current phase of the game
 	PlayerTroops      map[int]int  // Troops remaining for initial placement per player
 	TroopsToPlace     int          // Troops to place during reinforcement phase
@@ -687,7 +687,7 @@ func (gs GameState) Play(move Move) State {
 	}
 
 	// Update the last move
-	newGs.LastMove = move
+	newGs.LastMove = *(move.(*GameMove))
 
 	// Check for winner
 	newGs.Won = newGs.CheckWinner()
