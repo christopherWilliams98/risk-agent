@@ -62,7 +62,8 @@ func (gs *GameState) calculateBorderScore() float64 {
 		}
 
 		myTroops := float64(gs.TroopCounts[canton])
-		// Tally all enemy neighbors factors in connectedness: higher connections, higher strategic value
+		// Tally troop difference with all enemy neighbors
+		// factors in connectedness: higher connections, higher strategic value
 		// (e.g. more opportunities to attack, potentially a chokepoint, etc)
 		for _, neighbor := range gs.Map.Cantons[canton].AdjacentIDs {
 			if gs.Ownership[neighbor] != owner {
