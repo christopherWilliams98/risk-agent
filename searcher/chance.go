@@ -11,7 +11,8 @@ type chance struct {
 	player   string
 	children []*decision
 	rewards  float64
-	visits   int
+	phase    game.Phase
+	visits   float64
 }
 
 func newChance(parent *decision) *chance {
@@ -19,7 +20,8 @@ func newChance(parent *decision) *chance {
 		parent:  parent,
 		player:  parent.player,
 		rewards: 0,
-		visits:  0,
+		visits:  1,
+		phase:   parent.phase,
 	}
 }
 
@@ -60,37 +62,35 @@ func (c *chance) applyLoss() {
 	c.Lock()
 	defer c.Unlock()
 
-	c.rewards += LOSS
+	c.rewards += Loss
 	c.visits++
 }
 
-func (c *chance) stats() (player string, rewards float64, visits int) {
+func (c *chance) stats() (player string, rewards float64, visits float64) {
 	c.RLock()
 	defer c.RUnlock()
 
 	return c.player, c.rewards, c.visits
 }
 
-func (c *chance) Backup(winner string) Node {
+func (c *chance) Backup(player string, score float64) Node {
 	c.Lock()
 	defer c.Unlock()
 
 	c.reverseLoss()
 
-	c.rewards += computeReward(winner, c.player)
+	c.rewards += computeReward(player, score, c.player)
 	c.visits++
 
 	return c.parent
 }
 
 func (c *chance) reverseLoss() {
-	c.rewards -= LOSS
+	c.rewards -= Loss
 	c.visits--
 }
 
-func (c *chance) Visits() int {
-	c.RLock()
-	defer c.RUnlock()
-
-	return c.visits
+func (c *chance) Policy() map[game.Move]float64 {
+	// Chance nodes do not have a policy (stochastic outcomes)
+	return nil
 }

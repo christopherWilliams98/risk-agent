@@ -38,7 +38,7 @@ func TestUCTEvaluate(t *testing.T) {
 		policy1 := newUCT(2.0, 100)
 		policy2 := newUCT(2.0, 1000)
 		rewards := 5.0
-		visits := 10
+		visits := 10.0
 
 		score1 := policy1.evaluate(rewards, visits)
 		score2 := policy2.evaluate(rewards, visits)
@@ -61,7 +61,7 @@ func TestUCTEvaluate(t *testing.T) {
 
 	t.Run("exploitation term increases with rewards", func(t *testing.T) {
 		policy := newUCT(2.0, 100)
-		visits := 10
+		visits := 10.0
 
 		score1 := policy.evaluate(5.0, visits)
 		score2 := policy.evaluate(10.0, visits)

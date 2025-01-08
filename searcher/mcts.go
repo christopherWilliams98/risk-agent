@@ -1,6 +1,7 @@
 package searcher
 
 import (
+	"encoding/json"
 	"risk/game"
 	"sync"
 	"time"
@@ -8,187 +9,212 @@ import (
 	"golang.org/x/exp/rand"
 )
 
-// TODO: need to export?
-type option func(mcts *MCTS)
+type Option func(mcts *MCTS)
 
 type Segment struct {
-	Move  game.Move
+	Move  game.GameMove
 	State game.State
+}
+
+// Custom struct to help with unmarshaling
+type segmentAlias struct {
+	Move  game.GameMove
+	State game.GameState
+}
+
+// Custom unmarshaler for Segment
+func (s *Segment) UnmarshalJSON(data []byte) error {
+	var alias segmentAlias
+	if err := json.Unmarshal(data, &alias); err != nil {
+		return err
+	}
+	s.Move = alias.Move
+	s.State = &alias.State // Assign GameState pointer to the State interface
+	return nil
 }
 
 type MCTS struct {
 	goroutines int
-	iterations int
+	episodes   int
 	duration   time.Duration
-	root       *decision
+	cutoff     int
+	root       Node
 }
 
-func WithGoroutines(goroutines int) option {
+func WithEpisodes(episodes int) Option {
 	return func(u *MCTS) {
-		u.goroutines = goroutines
+		u.episodes = episodes
 	}
 }
 
-func WithIterations(iterations int) option {
-	return func(u *MCTS) {
-		u.iterations = iterations
-	}
-}
-
-func WithDuration(duration time.Duration) option {
+func WithDuration(duration time.Duration) Option {
 	return func(u *MCTS) {
 		u.duration = duration
 	}
 }
 
-func NewMCTS(options ...option) *MCTS {
-	u := &MCTS{}
+func WithCutoff(depth int) Option {
+	return func(u *MCTS) {
+		u.cutoff = depth
+	}
+}
+
+func NewMCTS(goroutines int, options ...Option) *MCTS {
+	u := &MCTS{goroutines: goroutines, cutoff: MaxCutoff}
 	for _, option := range options {
 		option(u)
+	}
+	if u.episodes <= 0 && u.duration <= 0 {
+		panic("Must specify search episodes or duration")
 	}
 	return u
 }
 
-func (m MCTS) findSubtree(path []Segment) *decision {
-	if m.root == nil {
-		return nil
+func (m *MCTS) Simulate(state game.State, lineage []Segment) map[game.Move]float64 {
+	// Reuse subtree if possible
+	m.root = m.findSubtree(lineage, state)
+	// Run simulations to collect statistics
+	if m.episodes > 0 {
+		iterate(m.goroutines, m.episodes, m.cutoff, m.root, state)
+	} else if m.duration > 0 {
+		countdown(m.goroutines, m.duration, m.cutoff, m.root, state)
+	} else {
+		panic("Must specify search episodes or duration")
 	}
-	// Traverse tree by path
-	node := m.root
-	for _, segment := range path {
-		child := node.children[segment.Move]
-		if child == nil {
-			return nil
+	// Return visit counts at the root node
+	return m.root.Policy()
+}
+
+func iterate(goroutines int, episodes int, cutoff int, root Node, state game.State) {
+	task := make(chan any, episodes)
+	for i := 0; i < episodes; i++ {
+		task <- nil
+	}
+	close(task)
+
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+	for i := 0; i < goroutines; i++ {
+		go func() {
+			defer wg.Done()
+
+			for range task {
+				simulate(root, state, cutoff)
+			}
+		}()
+	}
+
+	wg.Wait()
+}
+
+func countdown(goroutines int, duration time.Duration, cutoff int, root Node, state game.State) {
+	var wg sync.WaitGroup
+	start := time.Now()
+
+	for i := 0; i < goroutines; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			for time.Since(start) < duration {
+				simulate(root, state, cutoff)
+			}
+		}()
+	}
+
+	wg.Wait()
+}
+
+func (m *MCTS) findSubtree(path []Segment, state game.State) Node {
+	gs := state.(*game.GameState)
+
+	if m.root == nil {
+		return newDecision(nil, state)
+	}
+	if len(path) == 0 {
+		// If root's phase doesn't match the current state's phase, discard it:
+		rootDecision := m.root.(*decision)
+		if rootDecision.phase != gs.Phase {
+			return newDecision(nil, state)
 		}
+		return m.root
+	}
+
+	node := m.root.(*decision)
+	for _, segment := range path {
+		// If mismatch in phase, discard
+		if node.phase != gs.Phase {
+			return newDecision(nil, state)
+		}
+
+		child := node.children[&segment.Move]
+		if child == nil {
+			return newDecision(nil, state)
+		}
+
 		switch child := child.(type) {
 		case *decision:
 			node = child
 		case *chance:
 			grandChild := child.selects(segment.State)
 			if grandChild == nil {
-				return nil
+				return newDecision(nil, state)
 			}
 			node = grandChild
 		default:
-			panic("Unexpected Node type")
+			panic("Unexpected node type")
 		}
 	}
-	// Return Node at end of path
+
+	// final check
+	if node.phase != gs.Phase {
+		return newDecision(nil, state)
+	}
+
+	// Return the node at the end of the path as the new root
+	node.parent = nil
 	return node
 }
 
-func (m *MCTS) RunSimulations(state game.State, lineage []Segment) map[game.Move]int {
-	// Reuse subtree if possible
-	node := m.findSubtree(lineage)
-	if node == nil {
-		node = newDecision(nil, state)
-	} else {
-		node.parent = nil
-	}
-	m.root = node
-
-	// Run simulations to collect statistics
-	// TODO: wait till parallel simulations complete
-	if m.iterations > 0 {
-		m.iterate(node, state)
-	} else if m.duration > 0 {
-		m.countdown(node, state)
-	} else {
-		panic("Must specify search iterations or duration")
-	}
-
-	// Return visit counts at root Node
-	// TODO: extract to method on decision node
-	visits := make(map[game.Move]int, len(m.root.children))
-	for move, child := range m.root.children {
-		_, _, visits[move] = child.stats()
-	}
-	return visits
+func simulate(root Node, state game.State, cutoff int) {
+	newNode, newState := selectThenExpand(root, state)
+	player, score := rollout(newState, cutoff)
+	backup(newNode, player, score)
 }
 
-func (m *MCTS) iterate(root Node, state game.State) {
-	progress := make(chan any, m.iterations)
-	done := make(chan any)
-
-	worker := func() {
-		for {
-			simulate(root, state)
-			select {
-			case progress <- nil:
-			case <-done:
-				return
-			}
-		}
-	}
-
-	driver := func() {
-		for i := 0; i < m.iterations; i++ {
-			<-progress
-		}
-		close(done)
-	}
-
-	for i := 0; i < m.goroutines; i++ {
-		go worker()
-	}
-
-	driver()
-}
-
-func (m *MCTS) countdown(root Node, state game.State) {
-	start := time.Now()
-	var wg sync.WaitGroup
-
-	worker := func() {
-		defer wg.Done()
-		for time.Since(start) < m.duration {
-			simulate(root, state)
-		}
-	}
-
-	for i := 0; i < m.goroutines; i++ {
-		wg.Add(1)
-		go worker()
-	}
-
-	wg.Wait()
-}
-
-// TODO: startEpisode()
-func simulate(root Node, state game.State) {
-	// TODO: ensure each episode manipulates a diff state copy
-	newNode, newState := doSelectionExpansion(root, state)
-	winner := doRollout(newState)
-	doBackup(newNode, winner)
-}
-
-func doSelectionExpansion(root Node, state game.State) (Node, game.State) {
+func selectThenExpand(root Node, state game.State) (Node, game.State) {
 	parent := root
 	child, state, selected := parent.SelectOrExpand(state)
-	for child != parent && selected {
+	for selected && (child != parent) {
 		parent = child
 		child, state, selected = parent.SelectOrExpand(state)
 	}
 	return child, state
 }
 
-func doRollout(state game.State) string {
-	// TODO: cutoff + manual evaluation function
+func rollout(state game.State, cutoff int) (string, float64) {
+	depth := 0
 	moves := state.LegalMoves()
-	for len(moves) > 0 {
-		// Follow a random rollout policy
-		// TODO: 75% attack vs pass, 90% fortify vs pass
-		move := moves[rand.Intn(len(moves))]
+	// Rollout till game over or for cutoff number of moves
+	for len(moves) > 0 && (depth < cutoff) {
+		move := moves[rand.Intn(len(moves))] // Random rollout policy
 		state = state.Play(move)
 		moves = state.LegalMoves()
+		depth++
 	}
-	return state.Winner()
+
+	if len(moves) == 0 { // Game over before cutoff
+		return state.Winner(), Win
+	}
+
+	// At cutoff state, return an evaluation score from current player's perspective
+	return state.Player(), state.Evaluate()
 }
 
-func doBackup(newNode Node, winner string) {
+func backup(newNode Node, player string, score float64) {
 	node := newNode
 	for node != nil {
-		parent := node.Backup(winner)
+		parent := node.Backup(player, score)
 		node = parent
 	}
 }

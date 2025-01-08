@@ -1,6 +1,7 @@
 package searcher
 
 import (
+	"fmt"
 	"math"
 	"risk/game"
 	"sync"
@@ -13,29 +14,29 @@ type decision struct {
 	moves    []game.Move        // Unexplored
 	children map[game.Move]Node // Explored
 	hash     game.StateHash
+	phase    game.Phase
 	rewards  float64
-	visits   int
+	visits   float64
 }
 
 func newDecision(parent Node, state game.State) *decision {
-	// TODO: randomize moves
-	// TODO: prioritize 'pass' moves (in attack and maneuver phases)
-	moves := state.LegalMoves()
+	gs := state.(*game.GameState)
 
-	// Lazily compute state ID
+	moves := gs.LegalMoves()
 	var hash game.StateHash
 	if _, ok := parent.(*chance); ok {
-		hash = state.Hash()
+		hash = gs.Hash()
 	}
 
 	return &decision{
 		parent:   parent,
-		player:   state.Player(),
+		player:   gs.Player(),
 		moves:    moves,
 		children: make(map[game.Move]Node, len(moves)),
 		hash:     hash,
 		rewards:  0,
-		visits:   0,
+		visits:   1,
+		phase:    gs.Phase,
 	}
 }
 
@@ -48,17 +49,24 @@ func (d *decision) SelectOrExpand(state game.State) (Node, game.State, bool) {
 	d.Lock()
 	defer d.Unlock()
 
-	if len(d.moves) == 0 && len(d.children) == 0 { // Terminal Node
+	if len(d.moves) == 0 && len(d.children) == 0 {
+		// Terminal
 		return d, state, false
 	}
 
 	var child Node
 	selected := false
-	if len(d.moves) > 0 { // Expand Node with an unexplored move
+	if len(d.moves) > 0 {
 		child, state = d.expands(state)
-	} else { // Select a child of fully expanded Node
+	} else {
 		child, state = d.selects(state)
 		selected = true
+	}
+
+	if child == d {
+		// Means we “skipped” the move => do NOT call child.applyLoss()
+		// Because that would cause a double lock.
+		return d, state, false
 	}
 
 	child.applyLoss()
@@ -66,20 +74,33 @@ func (d *decision) SelectOrExpand(state game.State) (Node, game.State, bool) {
 }
 
 func (d *decision) expands(state game.State) (Node, game.State) {
+	gs := state.(*game.GameState)
 	move := d.moves[0]
-	// TODO: copy state or pass arg by value?
-	state = state.Play(move)
+
+	// If the move is obviously invalid for this phase, skip it:
+	if !game.IsMoveValidForPhase(gs.Phase, move) {
+		fmt.Printf("[MCTS expands] Skipping invalid move: Phase=%d, ActionType=%d\n",
+			gs.Phase, move.(*game.GameMove).ActionType)
+
+		// remove the invalid move from the unexplored moves
+		d.moves = d.moves[1:]
+
+		// Also increment visits to avoid re-selecting the same node
+		d.visits++
+
+		return d, state
+	}
+	newState := state.Play(move)
 
 	var child Node
 	if move.IsStochastic() {
 		child = newChance(d)
 	} else {
-		child = newDecision(d, state)
+		child = newDecision(d, newState)
 	}
-
 	d.children[move] = child
 	d.moves = d.moves[1:]
-	return child, state
+	return child, newState
 }
 
 func (d *decision) selects(state game.State) (Node, game.State) {
@@ -91,9 +112,7 @@ func (d *decision) selects(state game.State) (Node, game.State) {
 		panic("unexplored parent node (0 visits)")
 	}
 
-	// TODO: potentially parallelize selection policy computation on child
-	//  nodes (large branching factor, many children, O(N) complexity)
-	policy := newUCT(C_SQUARED, d.visits)
+	policy := newUCT(CSquared, d.visits)
 	maxValue := math.Inf(-1)
 	var maxMove game.Move
 	for move, child := range d.children {
@@ -111,7 +130,6 @@ func (d *decision) selects(state game.State) (Node, game.State) {
 			maxMove = move
 		}
 	}
-	// TODO: copy state or pass arg by value?
 	return d.children[maxMove], state.Play(maxMove)
 }
 
@@ -119,39 +137,44 @@ func (d *decision) applyLoss() {
 	d.Lock()
 	defer d.Unlock()
 
-	d.rewards += LOSS
+	d.rewards += Loss
 	d.visits++
 }
 
-func (d *decision) stats() (player string, rewards float64, visits int) {
+func (d *decision) stats() (player string, rewards float64, visits float64) {
 	d.RLock()
 	defer d.RUnlock()
 
 	return d.player, d.rewards, d.visits
 }
 
-func (d *decision) Backup(winner string) Node {
+func (d *decision) Backup(player string, score float64) Node {
 	d.Lock()
 	defer d.Unlock()
 
-	if d.parent != nil { // Virtual loss is not applied on root Node
+	if d.parent != nil { // Virtual loss not applied on root node
 		d.reverseLoss()
 	}
 
-	d.rewards += computeReward(winner, d.player)
+	d.rewards += computeReward(player, score, d.player)
 	d.visits++
 
 	return d.parent
 }
 
 func (d *decision) reverseLoss() {
-	d.rewards -= LOSS
+	d.rewards -= Loss
 	d.visits--
 }
 
-func (d *decision) Visits() int {
+func (d *decision) Policy() map[game.Move]float64 {
 	d.RLock()
 	defer d.RUnlock()
 
-	return d.visits
+	visits := make(map[game.Move]float64, len(d.children))
+	for move, child := range d.children {
+		_, _, visits[move] = child.stats()
+	}
+
+	return visits
 }

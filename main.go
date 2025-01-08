@@ -1,60 +1,45 @@
 package main
 
 import (
-	"risk/communication/client"
-	"risk/communication/server"
+	"fmt"
+	"log"
+	gamemaster "risk/engine"
 	"risk/game"
-	"risk/gamemaster"
-	"risk/player"
-	"sync"
+	"risk/searcher/agent"
+	"time"
 )
 
+// run two agent servers on different ports (8080 & 8081).
 func main() {
-	// Initialize the game map and global game state
+	// 1) Start the first agent server in a goroutine
+	go agent.StartAgentServer("8080")
+
+	// 2) Start the second agent server in another goroutine
+	go agent.StartAgentServer("8081")
+
+	// Sleep a tiny bit to ensure servers have started.
+	time.Sleep(1 * time.Second)
+	log.Println("[main] Both agent servers should be up now.")
+
+	// 3) Now create the map, rules, and set up EngineHTTP with agent URLs
 	gameMap := game.CreateMap()
+	rules := game.NewStandardRules() // TODO I want more rules
 
-	// Initialize the game rules, right now just using the simplified standard rules
-	rules := game.NewStandardRules()
+	agentURLs := []string{
+		"http://localhost:8080",
+		"http://localhost:8081",
+	}
 
-	globalGameState := game.NewGameState(gameMap, rules)
+	engine := gamemaster.LocalEngineHTTP(
+		[]string{"Player1", "Player2"},
+		agentURLs,
+		gameMap,
+		rules,
+	)
 
-	// Initialize the GameMaster's ServerCommunicator
-	gmComm := server.NewServerCommunicator(globalGameState)
+	// 4) Run the game
+	engine.Run()
 
-	// Initialize the GameMaster
-	gameMaster := gamemaster.NewGameMaster(gmComm)
-
-	// Initialize Players with ClientCommunicator
-	player1Comm := client.NewClientCommunicator("http://localhost:8080")
-	player2Comm := client.NewClientCommunicator("http://localhost:8080")
-
-	player1 := player.NewPlayer(1, player1Comm)
-	player2 := player.NewPlayer(2, player2Comm)
-
-	// Initialize the game state
-	gameMaster.InitializeGame()
-
-	// WaitGroup for synchronization
-	var wg sync.WaitGroup
-	wg.Add(3)
-
-	// Start GameMaster in a goroutine
-	go func() {
-		defer wg.Done()
-		gameMaster.RunGame()
-	}()
-
-	// Start players in goroutines
-	go func() {
-		defer wg.Done()
-		player1.Play()
-	}()
-
-	go func() {
-		defer wg.Done()
-		player2.Play()
-	}()
-
-	// Wait for goroutines to finish
-	wg.Wait()
+	winner := engine.State.Winner()
+	fmt.Printf("Game over! Winner: %s\n", winner)
 }
