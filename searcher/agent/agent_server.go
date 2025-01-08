@@ -17,8 +17,8 @@ func StartAgentServer(port string) {
 
 	myMCTS := searcher.NewMCTS(
 		8,
-		searcher.WithEpisodes(50),
-		searcher.WithCutoff(50),
+		searcher.WithEpisodes(150),
+		searcher.WithCutoff(100),
 	)
 
 	evalAgent = NewEvaluationAgent(myMCTS)
