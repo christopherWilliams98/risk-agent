@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 
+########################################################
+# 0) http://127.0.0.1:5000/
+########################################################
+
 import json
 from pathlib import Path
 
@@ -46,6 +50,9 @@ GO_TO_GEO = {
     15: 17, 9:  18, 0:  19, 19: 20, 20: 21,
     22: 22, 23: 23, 12: 24, 7:  25, 10: 26,
 }
+
+# Debugging: Verify the mapping
+print("GO_TO_GEO Mapping:", GO_TO_GEO)
 
 ########################################################
 # 3) FLASK: /visualhook
@@ -100,18 +107,20 @@ def update_map(_):
     """Called every 2s. Displays:
        - Choropleth (no legend)
        - Green troop labels
-       - Arrows for Attack/Maneuver
+       - Arrows for Attack/Maneuver with circle markers
        - Top text with color-coded player/phase/troopsToPlace
     """
     state = app_data["latest_state"]
     if not state:
+        # Return an empty choropleth map to prevent errors
         return px.choropleth_mapbox()
 
     ownership_list = state.get("Ownership", [])
     troop_counts   = state.get("TroopCounts", [])
     current_player = state.get("CurrentPlayer", 0)
     phase_index    = state.get("Phase", 0)
-        # Track previous player and increment turn if player changes
+    
+    # Track previous player and increment turn if player changes
     if "previous_player" not in app_data:
         app_data["previous_player"] = current_player
         app_data["turn_counter"] = 0
@@ -161,6 +170,51 @@ def update_map(_):
     # Convert to go.Figure
     fig = go.Figure(data=choropleth.data, layout=choropleth.layout)
 
+    # (2) Draw an arrow for lastMove if Attack/Maneuver
+    last_move = state.get("lastMove", {})
+    a_type = last_move.get("ActionType", None)
+    from_canton = last_move.get("FromCantonID", -1)
+    to_canton   = last_move.get("ToCantonID", -1)
+
+    arrow_col = None
+    if a_type == ATTACK_ACTION:
+        arrow_col = "orange"
+    elif a_type == MANEUVER_ACTION:
+        arrow_col = "purple"
+
+    if arrow_col and from_canton >=0 and to_canton >=0:
+        f_num = GO_TO_GEO.get(from_canton, 999)
+        t_num = GO_TO_GEO.get(to_canton, 999)
+        if f_num in canton_centroids and t_num in canton_centroids:
+            fx, fy = canton_centroids[f_num]
+            tx, ty = canton_centroids[t_num]
+            # Debugging: Print coordinates
+            print(f"Drawing arrow from KANTONSNUM {f_num} at ({fx}, {fy}) to {t_num} at ({tx}, {ty})")
+            # Draw the line
+            arrow_line = go.Scattermapbox(
+                lon=[fx, tx],
+                lat=[fy, ty],
+                mode="lines",
+                line=dict(color=arrow_col, width=3),
+                hoverinfo="none"
+            )
+            fig.add_trace(arrow_line)
+            
+            # Add the arrowhead as a circle marker at the target canton
+            arrow_head = go.Scattermapbox(
+                lon=[tx],
+                lat=[ty],
+                mode="markers",
+                marker=dict(
+                    symbol="circle",  # Using circle as arrowhead
+                    size=15,          # Adjust size as needed
+                    color=arrow_col,  # Same color as the line
+                    opacity=1         # Ensure full opacity
+                ),
+                hoverinfo="none"
+            )
+            fig.add_trace(arrow_head)
+
     # (1) Troop labels
     lat_vals = []
     lon_vals = []
@@ -177,6 +231,7 @@ def update_map(_):
             lat_vals.append(None)
             text_vals.append("")
 
+    # Add troop labels after arrows to render them on top
     scatter_troops = go.Scattermapbox(
         lat=lat_vals,
         lon=lon_vals,
@@ -186,34 +241,6 @@ def update_map(_):
         hoverinfo="none"
     )
     fig.add_trace(scatter_troops)
-
-    # (2) draw an arrow for lastMove if Attack/Maneuver
-    last_move = state.get("lastMove", {})
-    a_type = last_move.get("ActionType", None)
-    from_canton = last_move.get("FromCantonID", -1)
-    to_canton   = last_move.get("ToCantonID", -1)
-
-    arrow_col = None
-    if a_type == ATTACK_ACTION:
-        arrow_col = "orange"
-    elif a_type == MANEUVER_ACTION:
-        arrow_col = "purple"
-
-    if arrow_col and from_canton >=0 and to_canton>=0:
-        f_num = GO_TO_GEO.get(from_canton, 999)
-        t_num = GO_TO_GEO.get(to_canton, 999)
-        if f_num in canton_centroids and t_num in canton_centroids:
-            fx, fy = canton_centroids[f_num]
-            tx, ty = canton_centroids[t_num]
-            # line
-            arrow_line = go.Scattermapbox(
-                lon=[fx, tx],
-                lat=[fy, ty],
-                mode="lines",
-                line=dict(color=arrow_col, width=3),
-                hoverinfo="none"
-            )
-            fig.add_trace(arrow_line)
 
     # Player color
     p_color = "red" if current_player == 1 else "blue"
@@ -244,6 +271,7 @@ def update_map(_):
     )
 
     return fig
+
 
 ########################################################
 # 5) RUN THE APP

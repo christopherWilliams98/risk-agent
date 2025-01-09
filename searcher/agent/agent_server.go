@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-
 	"risk/game"
+	"risk/meta"
 	"risk/searcher"
 )
 
@@ -16,9 +16,9 @@ func StartAgentServer(port string) {
 	log.Printf("[AgentServer] Starting agent server on :%s ...", port)
 
 	myMCTS := searcher.NewMCTS(
-		8,
-		searcher.WithEpisodes(150),
-		searcher.WithCutoff(100),
+		meta.GO_ROUTINES,
+		searcher.WithEpisodes(meta.EPISODES),
+		searcher.WithCutoff(meta.WITH_CUTOFF),
 	)
 
 	evalAgent = NewEvaluationAgent(myMCTS)

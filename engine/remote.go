@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"risk/game"
+	"risk/meta"
 )
 
 type EngineHTTP struct {
@@ -40,14 +41,13 @@ func LocalEngineHTTP(players []string, urls []string, m *game.Map, r game.Rules)
 
 func (e *EngineHTTP) Run() {
 	turnCount := 0
-	maxTurns := 500
 
 	updates := make([][]Update, len(e.AgentURLs))
 	for i := range updates {
 		updates[i] = []Update{}
 	}
 
-	for e.State.Winner() == "" && turnCount < maxTurns {
+	for e.State.Winner() == "" && turnCount < meta.MAX_TURNS {
 		currentPlayerID := e.State.CurrentPlayer
 		agentIndex := currentPlayerID - 1
 
@@ -77,7 +77,7 @@ func (e *EngineHTTP) Run() {
 	if e.State.Winner() != "" {
 		fmt.Printf("Game ended due to a winner: %s\n", e.State.Winner())
 	} else {
-		fmt.Printf("Stopped after %d turns (no winner yet)\n", maxTurns)
+		fmt.Printf("Stopped after %d turns (no winner yet)\n", meta.MAX_TURNS)
 	}
 }
 
