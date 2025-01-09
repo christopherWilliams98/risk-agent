@@ -10,11 +10,11 @@
 This chapter gives an overview of various successful techniques integral to building a board game playing agent. 
 
 
-## Monte-Carlo Tree Search
+## Monte-Carlo Tree Search (MCTS)
 <!-- MCTS: 1) definition 2) idea: how/why it works -->
-Monte-Carlo Tree Search (MCTS) (Coulom 2007; Kocsis et al. 2006) is family of heuristic search algorithms used for decision-making processes, with particularly wide application in game playing. It explores a finite search space through repeated sampling and simulation, constructing a search tree iteratively and storing simulation results in the process to aid future decision-making. With sufficient exploration, the algorithm collects increasingly robust statistics and becomes increasingly capable in finding the most promising move.
+MCTS (Coulom 2007; Kocsis et al. 2006) is a family of heuristic search algorithms used for decision-making processes, with particularly wide application in game playing. It explores a finite search space through repeated sampling and simulation, constructing a search tree iteratively and storing simulation results in the process to aid future decision-making. With sufficient exploration, the algorithm collects increasingly robust statistics and becomes increasingly capable in finding the most promising move.
 
-MCTS usually begins with only a root node in the search tree, representing some initial state. The algorithm builds up the tree by following the selection, expansion, rollout and backup steps iteratively to simulate many possible game paths from the initial state to a terminal state (Chaslot et al. 2008b). One iteration of such simulation is called an episode. After many episodes, the tree consists of many layers of nodes and edges connecting pairs of nodes. Each node represents a state encountered during the game simulation with known legal moves and each edge a move played resulting in the state transition from the parent to the child node. Each node also tracks the number of simulations that have passed through it and the rewards accumulated from the outcomes of these simulations. [Figure 1] breaks down an episode of simulation into four distinct phases on a seach tree that already has 6 nodes.
+MCTS usually begins with only a root node in the search tree, representing some initial state. The algorithm builds up the tree by following the selection, expansion, rollout and backup steps iteratively to simulate many possible game paths from the initial state to a terminal state (Chaslot et al. 2008b). One iteration of such simulation is called an episode. After many episodes, the tree consists of many layers of nodes and edges connecting pairs of nodes. Each node represents a state encountered during the game simulation with known legal moves and each edge a move played resulting in the state transition from the parent to the child node. Each node also tracks statistics such as the number of simulations that have passed through it and the rewards accumulated from the outcomes of these simulations. [Figure 1] breaks down an episode of simulation into four distinct phases on a seach tree that already has 6 nodes.
 
 <!-- TODO: annotate nodes along the traversed path with statistics updates -->
 ![Figure 1: The four phases of an MCTS episode](image.png)
@@ -73,15 +73,19 @@ MCTS is computationally intensive, requiring a large number of simulation episod
 
 
 ## Chance Nodes
-Chance nodes are introduced in expectimax search to handle stochastic events in adversarial games (Russell & Norvig, 2010). Unlike a normal node which represents a fixed state, a chance node represents a stochastic event like dice roll that could lead to many different outcomes. Each child of a chance node aligns with a possible outcome from the stochastic event.
+<!-- concept: represent stochastic event with multiple outcomes -->
+Chance nodes are introduced in expectimax search to handle stochastic events in adversarial games (Russell & Norvig, 2010). Unlike a normal node which represents a state, a chance node represents a stochastic *event* like dice roll that could lead to multiple different outcomes. Each child of a chance node aligns with a possible outcome from the stochastic event.
 
-When applied in MCTS, the use of chance nodes requires the algorithm to know when the chance event occurs so a chance node could be added to the search tree instead of a normal node, and the outcomes from the the chance event to add a new or find an existing child during the tree traversal. The probability of each outcome also needs to be known, so outcomes could be sampled according to the probability distribution during simulations. Consequently, the value of a chance node computed from averaging the results of its children should correctly reflect the expected outcome of all simulated games passing through the chance node. 
+<!-- process: 1) add/select chance node (event) 2) add/select child node (outcome) 3) track visits (probability distribution) -->
+When applied in MCTS, the use of chance node requires the algorithm to know when a chance event occurs and its outcomes, so a chance node could be added to the search tree instead of a normal node, and a child node could be added for each outcome. The probability distribution of the outcomes also needs to be known, so the outcomes could be sampled accordingly during simulations. Consequently, the statistics in a chance node capture the simulation results from all possible outcomes of this stochastic event in aggregate. When the selection policy computes the value of a chance node, the exploitation term averages the results of its children weighted by their probabilities, which correctly reflects the expected outcome of games passing through this chance node. 
 
-[Figure 3] illustrates a chance node in an MCTS tree for a stochastic move with binary outcomes. Node S represents the state or board positions prior to the chance event. Chance node A represents the move leading to the chance event such as a dice roll. Node O1 represents one outcome of the chance event sampled previously and seen by the search tree. Node O2 represents another outcome that is newly sampled and to be added to the tree.
+[Figure 3] shows a part of an MCTS tree with a chance node for a chance event with two possible outcomes. Node S represents the game state prior to the dice roll. Chance node A represents the rolling of the dice. Node O1 and O2 each represents an outcome sampled by a previous simulation and already added to the search tree.
 
+<!-- TODO: add node statistics: S 2 wins + 1 loss = 3 simulations, O1 2 wins = 2 simulations, O2 1 loss = 1 simulation -->
 ![Figure 3: A chance node in an MCTS search tree](image-7.png)
 
-This approach allows MCTS to handle games with randomness by incorporating the true probabilities into the tree search process. The gathered statistics naturally reflect the expected outcomes across many simulations, enabling the algorithm to make decisions accounting for the inherent uncertainty in stochastic games.
+<!-- purpose: account for outcome probabilities-->
+This approach allows MCTS to handle games with randomness by incorporating the true probabilities into the search process and the tree statistics through repeated outcome sampling. The collective simulation results across all outcomes inform the true value of the chance node, enabling the algorithm to make decisions accounting for the inherent uncertainty in stochastic games.
 
 
 ## Parallel MCTS
@@ -105,7 +109,7 @@ This approach achieves a high level of parallism and scales well since the trees
 
 
 ### Tree Parallelization
-Tree parallelization maintains a single shared search tree that multiple independent threads traverse and update concurrently. This approach is a natural fit for shared memory systems to fully leverage the available bandwidth to communicate simulation results. However, this introduces the challenge of preventing data corruption should multiple threads visit and update the same parts of the tree. Figure 2c illustrates 3 race condition scenarios where simulateneous access to the same node by multiple threads without proper synchronization could lead to data corruption[^lock_free]. 
+Tree parallelization maintains a single shared search tree that multiple independent threads traverse and update concurrently. This introduces the challenge of preventing data corruption should multiple threads visit and update the same parts of the tree. Figure 2c illustrates 3 race condition scenarios where simulateneous access to the same node by multiple threads could lead to data corruption without proper synchronization[^lock_free]. 
 
 ![Figure 2c: 3 parallel MCTS race condition scenarios](image-1.png)
 
@@ -147,7 +151,8 @@ limitations: 1) TODO -->
 
 # Implementation 
 <!-- TODO: transition: define objectives/scope of work -->
-
+<!-- introduce contents in this chapter: MCTS simulate games with deterministic moves, chance nodes to accommodate stochastic events/attack, parallelization to scale/speed up simulations -->
+<!-- generic to any deterministic or stochastic game implementing the interface -->
 
 ## Risk Game
 <!-- TODO: implemented rules change to limit state/action space, perfect information -->
@@ -194,12 +199,12 @@ The implementation provides two evaluation functions:
 
 1. Resource Evaluation: This evaluation function simply tallies the number of territories, troops and continents controlled by a player and computes an equally weighted sum. This uses the sheer amount of resources as a reflection of a player's ability to win the game compared to his opponent.
 
-2. Border Strength Evaluation: In addition to the resource tally, this evaluation function calculates the troop difference between each pair of a player's border territory and adjacent enemy territory. This incorporates a few game-specific heuristics. Troop difference directly correlates to the likelihood of a territory being captured by its enemy neighbor in an attack, since each additional troop allows the attacker to roll the die once more. Moreover, by summing the troop difference with all of a territory's enemy neighbors, it factors in the connectedness of that border territory. If the calculation of troop difference accumulates for a well-connected border territory, it reflects its higher strategic value in the game, as more highly connected territories offer more paths for attack and defense and could be a valuable target in expanding territories and capturing continents. 
+2. Border Strength Evaluation: In addition to the resource tally, this evaluation function calculates the troop difference between each pair of a player's border territory and adjacent enemy territory. This incorporates a few game-specific heuristics. Troop difference directly correlates to the likelihood of a territory being captured by its enemy neighbor in an attack, since each additional troop allows the attacker to roll the dice once more. Moreover, by summing the troop difference with all of a territory's enemy neighbors, it factors in the connectedness of that border territory. If the calculation of troop difference accumulates for a well-connected border territory, it reflects its higher strategic value in the game, as more highly connected territories offer more paths for attack and defense and could be a valuable target in expanding territories and capturing continents. 
 
 Both evaluation functions normalizes a player's score relative to the other player's score to return a floating-point number between -1 and 1. The evaluation result reflects the position of the player at the cutoff state. Positive values mean a winning position, and negative values losing. The absolute value indicates how strong the winning or losing position is. This result estimates the potential outcome should playout completes from the cutoff state, and is, therefore, directly used as the reward. A reward equal to the evaluation result is set for the leaf node's player, if it is the same player as the cutoff state's. Otherwise, the result is negated as the reward, to reflect the estimated outcome from the opponent's perspective.
 
 
-### Backup
+### Backup: Propagating The Result
 The backup step starts at the new leaf node and continues up the traversed path to the root node recursively. Shown in [Figure 7], at each node, the implementation first increments the visit count by one. To accommodate possible turn change, it then considers whether the node represents the same player as the leaf node. If yes, the playout reward is added to the node's rewards. Otherwise, the playout reward is flipped before being accumulated. 
 
 ![Figure 7: The backup phase of MCTS](image-12.png)
@@ -210,12 +215,36 @@ This ensures the node statistics always capture simulation results from the pers
 
 
 ## Chance Nodes
-<!-- Uncertainty can be introduced in a board game in two ways: (1) by hiding certain parts of the position for the player (e.g., hiding the rank of piece in Stratego) and (2) by introducing randomness (e.g., rolling a die in Backgammon). The first is called imperfect information (or a partial observable environment); the second is called stochasticity. (MCTS in Board Games) TODO: explain how each is tackled -->
+The implementation extends the standard MCTS tree structure with chance nodes to handle stochastic events in the Risk game, specifically the dice rolls when an attack is launched. When an attack move is selected during tree traversal, a chance node is created if it does not exist already, to represent the dice roll event. Unlike regular nodes which maintain a mapping between moves and child nodes, a chance node simply maintains a group of child nodes, each representing a distinct outcome state encountered through previous simulations. The implementation identifies outcomes by computing a hash of the game state after the dice roll. This hash captures the essential elements of the state affected by the dice roll, such as troop counts and terroritory ownership, to distinguish one resulting state from another.
 
-<!-- In the case the outcomes of a chance event lead to different board positions, a chance node has to be used. For example, a battle’s outcome in the game of Risk is decided by rolling a die, leading to outcomes where board positions have a different number of pieces.
-Selecting a child is typically performed by sampling a single outcome based on a given probability distribution. (MCTS in Board Games) -->
+When the chance node is encountered again during selection, the implementation first computes the hash of the resulting state after the dice roll. It then searches through the existing child nodes for a matching hash. If found, that child node is selected, representing the same dice roll outcome and resulting state being encountered again, and the selection process continues onto the child. If no matching outcome exists, expansion occurs and a regular node is created for this new outcome and added to the chance node's list of children. Figure 8 describes this selection and expansion process of chance nodes based on the move's outcome. This process allows the search tree to gradually discover and incorporate different possible outcomes of the stochastic event.
 
-## Parallelization 
+![Figure 8: The selection and expansion of chance nodes](image-13.png)
+
+Figure 9 shows how a subtree with a chance node grows over 4 episodes. The initial subtree contains only Node S. In Episode 1, selecting an attack from Node S expands the node to add a triangular chance node representing the dice roll. Episode 2 selects the same attack move and expands the chance node with child O1 for the dice roll outcome. During Episode 3, the attack produces a different dice roll outcome, expanding the chance node again with another child O2. In Episode 4, the attack yields the same outcome as Episode 2, so the existing child O1 is selected and subsequently expanded with an unexplored move. In all four episodes, playout and backup follows the standard MCTS procedure, always beginning from the newly added node representing a new game state.
+
+![Figure 9: The growth of a subtree with a chance node across 4 episodes](image-14.png)
+
+During backup, a chance node accumulates visits and playout rewards from all its outcome nodes, and thus, maintains aggregate statistics of all simulations that pass through it. These statistics represent the expected value of the attack move across all possible dice roll outcomes. When the selection policy evaluates an attack move during tree traversal, it uses these aggregate statistics of the corresponding chance node, effectively considering the average case performance of the attack across different possible outcomes.
+
+
+## Tree Parallelization
+The implementation parallelizes the MCTS search using tree parallelization with local mutexes for thread synchronization and virtual losses for thread distribution. This is the natural approach for shared memory systems to take full advantage of the available bandwidth to communicate simulation results (Enzenberger and Müller 2010), and enables concurrent tree growth at scale while maintaining a single shared search tree. 
+
+
+### Local Mutex: Preventing Race Conditions
+Each node in the tree is protected by its own mutex, which must be acquired before any operation on the node's data. Three race condition scenarios exist in parallelized MCTS: two threads concurrently expanding the same node (Shared Expansion), two threads concurrently updating statistics of the same node (Shared Backup), and two threads concurrently updating and selecting the same node (Shared Backup and Selection) (Mirsoleimani et al. 2018). The locks are managed carefully across three tree operations, selection, expansion and backup, to avoid these race conditions. Since playout happens outside the tree, this phase is naturally parallelized across threads without any locking. 
+
+The thread acquires and releases the lock one node at a time as it traverses the tree for selection and expansion. When a thread visits a node, it acquires the node's lock before checking for unexplored moves and children. Selecting and expanding a node are implemented as a single atomic operation. If selection occurs, the implementation iteratively acquires each child's lock to read its statistics for UCT calculation, releasing the lock immediately after. Once the highest value child is found, the parent's lock is released. If expansion occurs, the lock is held until a new child is created and added to the node. This ensures that two threads cannot simultaneously expand the same node. 
+
+The iterative locking of children during selection allows other threads to access and update the children not currently being evaluated. For example, while selection is computing the value of one child, another child's statistics could be updated by backup in another thread, changing its value. An alternative considered is lock the parent and all its children en bloc. However, this significantly complicates the implementation and hampers parallelism, as it requires all children to be free prior to locking multiple nodes at once. In practice, MCTS can handle noise rather well with no strong need for perfect consistency (Enzenberger and Müller 2010). The volume of simulations and the random nature of MCTS drown out temporary inconsistencies and converge node statistics to their true values over time. The iterative locking approach is a deliberate trade-off for greater parallelism at the cost of data consistency. 
+
+During backup, the thread also acquires and releases locks one node at a time as it propagates the simulation result up the tree. At each node, the thread first acquires that node's lock, updates the node's visit count and accumulated rewards and releases the lock, before moving on to acquire the parent node's lock. This prevents threads from updating the same node simultaneously or updating and selecting the same node at the same time. 
+
+
+### Virtual Loss: Distributing The Search
+The virtual loss mechanism reduces lock contention on local mutexes by distributing threads across the search tree. When a node is selected or expanded, the implementation immediately applies a loss, the worst possible outcome, to the node by incrementing the visit count and adding a loss reward. This temporary loss is reversed when the node's statistics are updated with the actual simulation result during backup. This technique could be particularly effective for Risk even with a high level of parallelism, since its large branching factor provides ample opportunity for threads to explore different moves.
+
 
 ## Tree Reuse 
 
@@ -230,3 +259,5 @@ Selecting a child is typically performed by sampling a single outcome based on a
 <!-- 
 The results of the playout phase are crucial for the subsequent backup phase, where the statistics gathered during the simulation are used to update the values of nodes in the search tree. The playout outcome, whether a win, loss, or draw, is propagated back up the tree to inform the selection policy in future iterations.
  -->
+
+ This allows the search to be scaled based on available computational resources, from single-threaded execution to many concurrent threads. The effectiveness of parallelization is influenced by several factors including the branching factor of the game, the depth of the tree, and the ratio of time spent in tree traversal versus simulation. The local mutex with virtual loss approach is particularly effective for Risk, where the large branching factor and relatively expensive simulations provide ample opportunity for threads to naturally distribute across different parts of the search space.
