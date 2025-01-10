@@ -9,7 +9,7 @@ type evaluationAgent struct {
 	mcts *searcher.MCTS
 }
 
-// NewEvaluationAgent returns a new agent to play the game during evaluation (game-play).
+// NewEvaluationAgent returns a new agent for actual game play during evaluation.
 func NewEvaluationAgent(mcts *searcher.MCTS) Agent {
 	return evaluationAgent{mcts: mcts}
 }

@@ -1,4 +1,4 @@
-package gamemaster
+package engine
 
 import (
 	"fmt"

@@ -156,7 +156,7 @@ limitations: 1) TODO -->
 
 ## Risk Game
 <!-- TODO: implemented rules change to limit state/action space, perfect information -->
-
+multi-step decisions: reinforcement, attack and fortify phases 
 
 ## MCTS
 Given a game state, the MCTS implementation runs a series of simulation episodes to build up a search tree and identify the most promising move to play. To start, the implementation creates a root node representing the given game state. The root node is initialized with a visit count and rewards of 0. The root node is also initialized with edges that each represent a possible legal move from the game state. At this point, the search tree contains only the root node and the root node has no children. Each episode then begins at the root node and run a simulated game through the selection, expansion, playout and backup steps. The simulation grows the search tree and update its statistics. To reduce memory footprint, state is not stored in the tree nodes and is maintained separately by each episode. 

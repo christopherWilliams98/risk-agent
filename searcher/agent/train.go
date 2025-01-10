@@ -11,7 +11,7 @@ type trainingAgent struct {
 	mcts *searcher.MCTS
 }
 
-// NewTrainingAgent returns a new agent to play the game during training (self-play).
+// NewTrainingAgent returns a new agent for self-play during training.
 func NewTrainingAgent(mcts *searcher.MCTS) Agent {
 	return trainingAgent{mcts: mcts}
 }
