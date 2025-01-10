@@ -16,10 +16,10 @@ func NewEvaluationAgent(mcts *searcher.MCTS) Agent {
 
 func (a evaluationAgent) FindMove(state game.State, updates []searcher.Segment) game.Move {
 	policy := a.mcts.Simulate(state, updates)
-	return max(policy)
+	return findMax(policy)
 }
 
-func max(policy map[game.Move]float64) game.Move {
+func findMax(policy map[game.Move]float64) game.Move {
 	var maxMove game.Move
 	maxVisit := -1.0
 	for move, visit := range policy {
