@@ -43,6 +43,8 @@ This diagram shows the **multi-process flow** between the MCTS Player Agent, the
    Open a terminal and execute:  
    ```bash
    python visualizer.py
+   
+Then open http://127.0.0.1:5000/ in your browser.
 
 4. **Run the Game Master in Go**  
    Open a second terminal and execute:  
