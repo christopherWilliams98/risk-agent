@@ -3,7 +3,7 @@ package agent
 import (
 	"risk/game"
 	"risk/searcher"
-	"risk/searcher/metrics"
+	"risk/searcher/experiments"
 )
 
 type evaluationAgent struct {
@@ -15,7 +15,7 @@ func NewEvaluationAgent(mcts *searcher.MCTS) Agent {
 	return evaluationAgent{mcts: mcts}
 }
 
-func (a evaluationAgent) FindMove(state game.State, updates []searcher.Segment) (game.Move, metrics.SearchMetrics) {
+func (a evaluationAgent) FindMove(state game.State, updates []searcher.Segment) (game.Move, experiments.SearchMetrics) {
 	policy, metrics := a.mcts.Simulate(state, updates)
 	move := findMax(policy)
 	return move, metrics

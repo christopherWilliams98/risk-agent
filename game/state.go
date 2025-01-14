@@ -69,12 +69,12 @@ func NewGameState(m *Map, rules Rules) *GameState {
 		gs.TroopCounts[cid] = STARTING_UNITS
 	}
 
-	for i, owner := range gs.Ownership {
-		fmt.Printf("[NewGameState] Canton %d -> Player %d, TroopCounts = %d\n",
-			i, owner, gs.TroopCounts[i])
-	}
-	fmt.Printf("[NewGameState] Done assigning. Now calling calculateTroopsToPlace() for Player %d\n",
-		gs.CurrentPlayer)
+	// for i, owner := range gs.Ownership {
+	// fmt.Printf("[NewGameState] Canton %d -> Player %d, TroopCounts = %d\n",
+	// 	i, owner, gs.TroopCounts[i])
+	// }
+	// fmt.Printf("[NewGameState] Done assigning. Now calling calculateTroopsToPlace() for Player %d\n",
+	// 	gs.CurrentPlayer)
 
 	gs.InitCards()
 	gs.CurrentPlayer = 1
@@ -359,7 +359,7 @@ func (gs GameState) reinforcementMoves() []Move {
 
 func (gs GameState) attackMoves() []Move {
 	var moves []Move
-	fmt.Printf("[attackMoves] Player %d attacking...\n", gs.CurrentPlayer)
+	// fmt.Printf("[attackMoves] Player %d attacking...\n", gs.CurrentPlayer)
 
 	for cantonID, owner := range gs.Ownership {
 		if owner == gs.CurrentPlayer && gs.TroopCounts[cantonID] > 1 {
@@ -408,7 +408,7 @@ func (gs GameState) getPlayerOwnedTerritories() []int {
 // maneuverMoves generates all possible maneuver moves for the current player.
 func (gs GameState) maneuverMoves() []Move {
 	var moves []Move
-	fmt.Printf("[maneuverMoves] Player %d maneuvering...\n", gs.CurrentPlayer)
+	// fmt.Printf("[maneuverMoves] Player %d maneuvering...\n", gs.CurrentPlayer)
 
 	fromTerritories := gs.getPlayerTerritoriesWithTroops()
 	toTerritories := gs.getPlayerOwnedTerritories()
@@ -441,7 +441,7 @@ func (gs GameState) maneuverMoves() []Move {
 	moves = append(moves, &GameMove{
 		ActionType: PassAction,
 	})
-	fmt.Printf("[maneuverMoves] Generated %d moves\n", len(moves))
+	// fmt.Printf("[maneuverMoves] Generated %d moves\n", len(moves))
 	return moves
 }
 
@@ -627,8 +627,8 @@ func (gs GameState) Play(move Move) State {
 	newGs := gs.Copy()
 	gameMove := move.(*GameMove)
 
-	fmt.Printf("[Play] Called with Phase=%d, ActionType=%d, TroopsToPlace=%d\n",
-		gs.Phase, gameMove.ActionType, gs.TroopsToPlace)
+	// fmt.Printf("[Play] Called with Phase=%d, ActionType=%d, TroopsToPlace=%d\n",
+	// gs.Phase, gameMove.ActionType, gs.TroopsToPlace)
 	switch gs.Phase {
 	case ReinforcementPhase:
 		if gameMove.ActionType == ReinforceAction {
@@ -710,8 +710,8 @@ func (gs GameState) AdvancePhase() GameState {
 		newGs.HandleCardTrading()
 		newGs = *newGs.calculateTroopsToPlace()
 	}
-	fmt.Printf("[AdvancePhase] old=%v => new=%v (Player=%d)\n",
-		gs.Phase, newGs.Phase, newGs.CurrentPlayer)
+	// fmt.Printf("[AdvancePhase] old=%v => new=%v (Player=%d)\n",
+	// 	gs.Phase, newGs.Phase, newGs.CurrentPlayer)
 	return newGs
 }
 
@@ -748,8 +748,7 @@ func (gs GameState) calculateTroopsToPlace() *GameState {
 	troops := max(3, numTerritories/3)
 
 	// Debug:
-	fmt.Printf("[calculateTroopsToPlace] CurrentPlayer=%d, numTerritories=%d, baseTroops=%d\n",
-		gs.CurrentPlayer, numTerritories, troops)
+	// fmt.Printf("[calculateTroopsToPlace] CurrentPlayer=%d, numTerritories=%d, baseTroops=%d\n",gs.CurrentPlayer, numTerritories, troops)
 
 	// Check for region bonuses
 	for _, region := range gs.Map.Regions {
@@ -762,13 +761,11 @@ func (gs GameState) calculateTroopsToPlace() *GameState {
 		}
 		if ownsAll {
 			troops += region.Bonus
-			fmt.Printf("[calculateTroopsToPlace] Player %d fully controls region %s => bonus %d\n",
-				gs.CurrentPlayer, region.Name, region.Bonus)
+			// fmt.Printf("[calculateTroopsToPlace] Player %d fully controls region %s => bonus %d\n", gs.CurrentPlayer, region.Name, region.Bonus)
 		}
 	}
 	// debug
-	fmt.Printf("[calculateTroopsToPlace] Final troopsToPlace for Player %d = %d\n\n",
-		gs.CurrentPlayer, troops)
+	// fmt.Printf("[calculateTroopsToPlace] Final troopsToPlace for Player %d = %d\n\n", gs.CurrentPlayer, troops)
 
 	newGs.TroopsToPlace = troops
 	return &newGs

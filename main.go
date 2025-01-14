@@ -9,7 +9,7 @@ import (
 	"risk/game"
 	"risk/searcher"
 	"risk/searcher/agent"
-	"risk/searcher/metrics"
+	"risk/searcher/experiments"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -24,39 +24,34 @@ func main() {
 }
 
 func runSpeedupExperiment() {
-	const NumGames = 10 // Per match up
+	const NumGames = 1 // Per match up
 	const Duration = 500 * time.Millisecond
 	// Same config for both players in each game
 	// for the same playing strength and similar game length
-	matchups := [][]metrics.AgentConfig{
+	matchups := [][]experiments.Config{
 		{
 			{Goroutines: 1, Duration: Duration},
 			{Goroutines: 1, Duration: Duration},
 		},
-		{
-			{Goroutines: 8, Duration: Duration},
-			{Goroutines: 8, Duration: Duration},
-		},
-		{
-			{Goroutines: 64, Duration: Duration},
-			{Goroutines: 64, Duration: Duration},
-		},
+		// {
+		// 	{Goroutines: 8, Duration: Duration},
+		// 	{Goroutines: 8, Duration: Duration},
+		// },
+		// {
+		// 	{Goroutines: 64, Duration: Duration},
+		// 	{Goroutines: 64, Duration: Duration},
+		// },
 	}
 
-	log.Info().Msg("starting speedup experiment...")
-
-	writer, err := metrics.NewExperimentWriter(NumGames, matchups)
+	writer, err := experiments.NewWriter()
 	if err != nil {
 		panic(fmt.Sprintf("failed to create experiment writer: %v", err))
 	}
 
-	err = writer.WriteSetup()
-	if err != nil {
-		panic(fmt.Sprintf("failed to write experiment setup: %v", err))
-	}
-	log.Info().Msg("stored experiment setup")
+	// Run a number of games for each matchup
+	start := time.Now()
+	log.Info().Msg("starting speedup experiment...")
 
-	// Run NumGames for each matchup
 	for _, matchup := range matchups {
 		for i := 0; i < NumGames; i++ {
 			log.Info().Msgf("starting game %d between agent1=%+v and agent2=%+v", i+1, matchup[0], matchup[1])
@@ -72,11 +67,18 @@ func runSpeedupExperiment() {
 		}
 	}
 
+	end := time.Now()
 	log.Info().Msg("completed speedup experiment")
+
+	err = writer.WriteSetup(start, end, matchups, NumGames)
+	if err != nil {
+		panic(fmt.Sprintf("failed to write experiment setup: %v", err))
+	}
+	log.Info().Msg("stored experiment setup")
 }
 
 // runGame executes a single game between two agents and returns the winner
-func runGame(config1, config2 metrics.AgentConfig) (string, metrics.GameMetrics) {
+func runGame(config1, config2 experiments.Config) (string, experiments.GameMetrics) {
 	players := []string{"Player1", "Player2"}
 	agents := []engine.MCTSAdapter{
 		{InternalAgent: agent.NewEvaluationAgent(createMCTS(config1))},
@@ -91,7 +93,7 @@ func runGame(config1, config2 metrics.AgentConfig) (string, metrics.GameMetrics)
 	return winner, metrics
 }
 
-func createMCTS(config metrics.AgentConfig) *searcher.MCTS {
+func createMCTS(config experiments.Config) *searcher.MCTS {
 	options := []searcher.Option{}
 
 	if config.Episodes > 0 {

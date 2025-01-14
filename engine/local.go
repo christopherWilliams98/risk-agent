@@ -1,11 +1,11 @@
 package engine
 
 import (
-	"fmt"
+	// "fmt"
 	"risk/game"
 	"risk/searcher"
 	"risk/searcher/agent"
-	metric "risk/searcher/metrics"
+	metric "risk/searcher/experiments"
 
 	"github.com/rs/zerolog/log"
 )
@@ -59,7 +59,7 @@ func (e *Engine) Run() (string, metric.GameMetrics) {
 		agentIndex := currentPlayerID - 1
 
 		// Debug print
-		fmt.Printf("===== TURN BEGIN: Player %d (agent index %d) =====\n", currentPlayerID, agentIndex)
+		// fmt.Printf("===== TURN BEGIN: Player %d (agent index %d) =====\n", currentPlayerID, agentIndex)
 
 		move, metrics := e.Agents[agentIndex].FindMove(e.State, updates[agentIndex])
 		gameMetrics = append(gameMetrics, metric.MoveMetrics{
@@ -69,7 +69,7 @@ func (e *Engine) Run() (string, metric.GameMetrics) {
 		})
 
 		// Debug print
-		fmt.Printf("[Engine.Run] Player %d chose move: %+v\n", currentPlayerID, move)
+		// fmt.Printf("[Engine.Run] Player %d chose move: %+v\n", currentPlayerID, move)
 
 		newState := e.State.Play(move).(*game.GameState)
 
@@ -81,15 +81,15 @@ func (e *Engine) Run() (string, metric.GameMetrics) {
 		updates[agentIndex] = append(updates[agentIndex], u)
 
 		e.State = newState
-		fmt.Printf("turn %d\n", turnCount)
+		// fmt.Printf("turn %d\n", turnCount)
 		turnCount++
 
 	}
 
 	if e.State.Winner() != "" {
-		fmt.Printf("Game ended due to a winner: %s\n", e.State.Winner())
+		// fmt.Printf("Game ended due to a winner: %s\n", e.State.Winner())
 	} else {
-		fmt.Printf("Stopped after %d turns (no winner yet)\n", MaxTurns)
+		// fmt.Printf("Stopped after %d turns (no winner yet)\n", MaxTurns)
 	}
 
 	return e.State.Winner(), gameMetrics
@@ -111,8 +111,7 @@ func (ma *MCTSAdapter) FindMove(gs *game.GameState, recentUpdates []Update) (gam
 	candidate, metrics := ma.InternalAgent.FindMove(gs, segments)
 
 	if !game.IsMoveValidForPhase(gs.Phase, candidate) {
-		fmt.Printf("[MCTSAdapter] MCTS returned an invalid move for Phase=%d => forcing pass.\n",
-			gs.Phase)
+		// fmt.Printf("[MCTSAdapter] MCTS returned an invalid move for Phase=%d => forcing pass.\n", gs.Phase)
 		fallbackMoves := gs.LegalMoves()
 		if len(fallbackMoves) == 0 {
 			panic("No legal moves at all!")

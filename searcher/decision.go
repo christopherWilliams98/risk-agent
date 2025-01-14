@@ -1,7 +1,7 @@
 package searcher
 
 import (
-	"fmt"
+	// "fmt"
 	"math"
 	"risk/game"
 	"sync"
@@ -77,10 +77,10 @@ func (d *decision) expands(state game.State) (Node, game.State) {
 	gs := state.(*game.GameState)
 	move := d.moves[0]
 
+	// TODO: remove
 	// If the move is obviously invalid for this phase, skip it:
 	if !game.IsMoveValidForPhase(gs.Phase, move) {
-		fmt.Printf("[MCTS expands] Skipping invalid move: Phase=%d, ActionType=%d\n",
-			gs.Phase, move.(*game.GameMove).ActionType)
+		// fmt.Printf("[MCTS expands] Skipping invalid move: Phase=%d, ActionType=%d\n", gs.Phase, move.(*game.GameMove).ActionType)
 
 		// remove the invalid move from the unexplored moves
 		d.moves = d.moves[1:]
