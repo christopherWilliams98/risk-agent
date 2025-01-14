@@ -16,11 +16,11 @@ func NewTrainingAgent(mcts *searcher.MCTS) Agent {
 	return trainingAgent{mcts: mcts}
 }
 
-func (a trainingAgent) FindMove(state game.State, updates []searcher.Segment) game.Move {
-	policy := a.mcts.Simulate(state, updates)
+func (a trainingAgent) FindMove(state game.State, updates []searcher.Segment) (game.Move, searcher.MoveMetrics) {
+	policy, metrics := a.mcts.Simulate(state, updates)
 	// TODO: apply a temperature schedule as training progresses
 	policy = adjustTemperature(policy, 1.0)
-	return sample(policy)
+	return sample(policy), metrics
 }
 
 func adjustTemperature(policy map[game.Move]float64, temperature float64) map[game.Move]float64 {

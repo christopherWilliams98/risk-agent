@@ -44,7 +44,7 @@ func handleFindMove(w http.ResponseWriter, r *http.Request) {
 		payload.State.Rules = game.NewStandardRules()
 	}
 
-	chosenMove := evalAgent.FindMove(&payload.State, payload.Updates)
+	chosenMove, _ := evalAgent.FindMove(&payload.State, payload.Updates)
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(chosenMove); err != nil {

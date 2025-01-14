@@ -95,7 +95,7 @@ func (ma *MCTSAdapter) FindMove(gs *game.GameState, recentUpdates []Update) game
 			State: upd.State,
 		}
 	}
-	candidate := ma.InternalAgent.FindMove(gs, segments)
+	candidate, _ := ma.InternalAgent.FindMove(gs, segments)
 
 	if !game.IsMoveValidForPhase(gs.Phase, candidate) {
 		fmt.Printf("[MCTSAdapter] MCTS returned an invalid move for Phase=%d => forcing pass.\n",

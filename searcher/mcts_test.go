@@ -74,7 +74,7 @@ func TestSimulate(t *testing.T) {
 	t.Run("first episode expands root with one child", func(t *testing.T) {
 		initialState := mockStateDeterministic{player: "player1"}
 		mcts := NewMCTS(1, WithEpisodes(1))
-		got := mcts.Simulate(initialState, nil)
+		got, _ := mcts.Simulate(initialState, nil)
 
 		// 1st episode expands root with M1 to C1
 		expectedRoot := &decision{
@@ -96,7 +96,7 @@ func TestSimulate(t *testing.T) {
 	t.Run("second episode expands root with second child", func(t *testing.T) {
 		initialState := mockStateDeterministic{player: "player1"}
 		mcts := NewMCTS(1, WithEpisodes(2))
-		got := mcts.Simulate(initialState, nil)
+		got, _ := mcts.Simulate(initialState, nil)
 
 		// 2nd episode expands root with M2 to C2
 		expectedRoot := &decision{
@@ -123,7 +123,7 @@ func TestSimulate(t *testing.T) {
 	t.Run("third episode selects either child", func(t *testing.T) {
 		initialState := mockStateDeterministic{player: "player1"}
 		mcts := NewMCTS(1, WithEpisodes(3))
-		got := mcts.Simulate(initialState, nil)
+		got, _ := mcts.Simulate(initialState, nil)
 
 		// After 2 episodes, both moves have been tried once
 		// 3rd episode selects either child at random since they have equal UCT scores:
@@ -192,7 +192,7 @@ func TestSimulate(t *testing.T) {
 	t.Run("fourth episode balances exploration vs exploitation", func(t *testing.T) {
 		initialState := mockStateDeterministic{player: "player1"}
 		mcts := NewMCTS(1, WithEpisodes(4))
-		got := mcts.Simulate(initialState, nil)
+		got, _ := mcts.Simulate(initialState, nil)
 
 		// 4th episode selects the child not selected by E3 since it has equal exploitation but bigger exploration
 		// C1: rewards=WIN*2, visits=2, parent_visits=3, score = 2/2 + sqrt(2ln(3)/2)
@@ -243,7 +243,7 @@ func TestSimulateParallel(t *testing.T) {
 	initialState := mockStateDeterministic{player: "player1"}
 
 	mcts := NewMCTS(2, WithEpisodes(4)) // 2 goroutines, 4 episodes
-	got := mcts.Simulate(initialState, nil)
+	got, _ := mcts.Simulate(initialState, nil)
 
 	// After 4 episodes with 2 goroutines:
 	// - Root should have expanded both moves
@@ -340,7 +340,7 @@ func TestSimulateTerminal(t *testing.T) {
 		initialState := mockStateTerminal{player: "player1"}
 
 		mcts := NewMCTS(1, WithEpisodes(1))
-		got := mcts.Simulate(initialState, nil)
+		got, _ := mcts.Simulate(initialState, nil)
 
 		// First episode expands to terminal state
 		expectedRoot := &decision{
@@ -365,7 +365,7 @@ func TestSimulateTerminal(t *testing.T) {
 		initialState := mockStateTerminal{player: "player1"}
 
 		mcts := NewMCTS(1, WithEpisodes(2))
-		got := mcts.Simulate(initialState, nil)
+		got, _ := mcts.Simulate(initialState, nil)
 
 		// Second episode selects terminal state and does not expand
 		expectedRoot := &decision{
@@ -390,7 +390,7 @@ func TestSimulateTerminal(t *testing.T) {
 		initialState := mockStateTerminal{player: "player1"}
 
 		mcts := NewMCTS(1, WithEpisodes(3))
-		got := mcts.Simulate(initialState, nil)
+		got, _ := mcts.Simulate(initialState, nil)
 
 		// Third episode selects terminal state again and does not expand
 		expectedRoot := &decision{
@@ -416,7 +416,7 @@ func TestSimulateTerminalParallel(t *testing.T) {
 	initialState := mockStateTerminal{player: "player1"}
 
 	mcts := NewMCTS(2, WithEpisodes(3))
-	got := mcts.Simulate(initialState, nil)
+	got, _ := mcts.Simulate(initialState, nil)
 
 	// After 3 episodes with 2 goroutines:
 	// - Root should have expanded the move once
@@ -544,7 +544,7 @@ func TestSimulateStochastic(t *testing.T) {
 			nextOutcome: alternator(),
 		}
 		mcts := NewMCTS(1, WithEpisodes(1))
-		got := mcts.Simulate(initialState, nil)
+		got, _ := mcts.Simulate(initialState, nil)
 
 		// First episode expands root with M1 to chance node and uses S1 for rollout
 		expectedRoot := &decision{
@@ -573,7 +573,7 @@ func TestSimulateStochastic(t *testing.T) {
 			nextOutcome: alternator(),
 		}
 		mcts := NewMCTS(1, WithEpisodes(2))
-		got := mcts.Simulate(initialState, nil)
+		got, _ := mcts.Simulate(initialState, nil)
 
 		// Second episode expands root with M2 to S2
 		expectedRoot := &decision{
@@ -609,7 +609,7 @@ func TestSimulateStochastic(t *testing.T) {
 			nextOutcome: alternator(),
 		}
 		mcts := NewMCTS(1, WithEpisodes(3))
-		got := mcts.Simulate(initialState, nil)
+		got, _ := mcts.Simulate(initialState, nil)
 
 		// First episode used outcome S1 for rollout
 		// Third episode expands chance node with outcome S3
@@ -652,7 +652,7 @@ func TestSimulateStochastic(t *testing.T) {
 			nextOutcome: alternator(),
 		}
 		mcts := NewMCTS(1, WithEpisodes(4))
-		got := mcts.Simulate(initialState, nil)
+		got, _ := mcts.Simulate(initialState, nil)
 
 		// Fourth episode expands chance node with outcome S1
 		expectedRoot := &decision{
@@ -699,7 +699,7 @@ func TestSimulateStochastic(t *testing.T) {
 			nextOutcome: alternator(),
 		}
 		mcts := NewMCTS(1, WithEpisodes(5))
-		got := mcts.Simulate(initialState, nil)
+		got, _ := mcts.Simulate(initialState, nil)
 
 		// Fifth episode selects outcome S1 and expands it with M3
 		expectedRoot := &decision{
@@ -758,7 +758,7 @@ func TestSimulateStochasticParallel(t *testing.T) {
 	}
 
 	mcts := NewMCTS(2, WithEpisodes(5)) // 2 goroutines, 5 episodes
-	got := mcts.Simulate(initialState, nil)
+	got, _ := mcts.Simulate(initialState, nil)
 
 	// After 5 episodes with 2 goroutines:
 	// - Root should have expanded both moves
