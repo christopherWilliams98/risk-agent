@@ -5,9 +5,48 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"risk/game"
 	"strconv"
 	"time"
 )
+
+type EvalFn int
+
+const (
+	Resources EvalFn = iota
+	BorderStrength
+)
+
+func (e EvalFn) String() string {
+	switch e {
+	case Resources:
+		return "resources"
+	case BorderStrength:
+		return "borderStrength"
+	default:
+		return "default"
+	}
+}
+
+func (e EvalFn) Get() game.Evaluate {
+	switch e {
+	case Resources:
+		return game.EvaluateResources
+	case BorderStrength:
+		return game.EvaluateBorderStrength
+	default:
+		return nil
+	}
+}
+
+type AgentConfig struct {
+	ID         int
+	Goroutines int
+	Duration   time.Duration
+	Episodes   int
+	Cutoff     int
+	Evaluate   EvalFn
+}
 
 type GameRecord struct {
 	ID     int
@@ -52,7 +91,7 @@ func (w *Writer) WriteAgentConfigs(configs []AgentConfig) error {
 	defer writer.Flush()
 
 	// Write header
-	header := []string{"id", "goroutines", "duration", "episodes", "cutoff"}
+	header := []string{"id", "goroutines", "duration", "episodes", "cutoff", "evaluation"}
 	err = writer.Write(header)
 	if err != nil {
 		return fmt.Errorf("failed to write agent configs header: %w", err)
@@ -66,6 +105,7 @@ func (w *Writer) WriteAgentConfigs(configs []AgentConfig) error {
 			config.Duration.String(),
 			strconv.Itoa(config.Episodes),
 			strconv.Itoa(config.Cutoff),
+			config.Evaluate.String(),
 		}
 		err = writer.Write(row)
 		if err != nil {

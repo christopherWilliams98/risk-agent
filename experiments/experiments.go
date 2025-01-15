@@ -12,17 +12,21 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const NumGames = 2 // Per match up
+const (
+	NumGames   = 10  // Per match up
+	Goroutines = 32  // TODO: based on throughput experiment
+	Episodes   = 100 // TODO: based on volume experiment
+)
 
-func RunThroughputExperiment() {
+func RunParallelizationExperiment() {
 	const Duration = 10 * time.Millisecond
 	configs := []metrics.AgentConfig{
 		{ID: 1, Goroutines: 1, Duration: Duration},
-		{ID: 2, Goroutines: 2, Duration: Duration},
-		{ID: 3, Goroutines: 4, Duration: Duration},
+		// {ID: 2, Goroutines: 2, Duration: Duration},
+		// {ID: 3, Goroutines: 4, Duration: Duration},
 		{ID: 4, Goroutines: 8, Duration: Duration},
-		{ID: 5, Goroutines: 16, Duration: Duration},
-		{ID: 6, Goroutines: 32, Duration: Duration},
+		// {ID: 5, Goroutines: 16, Duration: Duration},
+		// {ID: 6, Goroutines: 32, Duration: Duration},
 		{ID: 7, Goroutines: 64, Duration: Duration},
 		{ID: 8, Goroutines: 128, Duration: Duration},
 	}
@@ -39,12 +43,11 @@ func RunThroughputExperiment() {
 }
 
 func RunVolumeExperiment() {
-	const Goroutines = 32
-	// TODO: based on throughput experiment
+	// TODO: episodes based on throughput experiment
 	configs := []metrics.AgentConfig{
 		{ID: 1, Goroutines: Goroutines, Episodes: 10},
-		{ID: 1, Goroutines: Goroutines, Episodes: 50},
-		{ID: 1, Goroutines: Goroutines, Episodes: 100},
+		{ID: 2, Goroutines: Goroutines, Episodes: 50},
+		{ID: 3, Goroutines: Goroutines, Episodes: 100},
 	}
 
 	// Each matchup pairs two different configs
@@ -57,6 +60,26 @@ func RunVolumeExperiment() {
 
 	// volume -> playing strength: episodes/search -> win rate/Elo rating
 	runExperiment("volume", configs, matchUps)
+}
+
+func RunCutoffExperiment() {
+	// TODO: cutoff based on volume experiment game length quartiles
+	configs := []metrics.AgentConfig{
+		{ID: 1, Goroutines: Goroutines, Episodes: Episodes}, // Full playout
+		{ID: 2, Goroutines: Goroutines, Episodes: Episodes, Cutoff: 10},
+		{ID: 3, Goroutines: Goroutines, Episodes: Episodes, Cutoff: 50},
+	}
+
+	// Each matchup pairs two different configs
+	matchUps := [][]metrics.AgentConfig{}
+	for i, config1 := range configs {
+		for _, config2 := range configs[i+1:] {
+			matchUps = append(matchUps, []metrics.AgentConfig{config1, config2})
+		}
+	}
+
+	// cutoff depth -> playing strength: faster, more playouts -> win rate/Elo rating
+	runExperiment("cutoff", configs, matchUps)
 }
 
 func runExperiment(name string, configs []metrics.AgentConfig, matchUps [][]metrics.AgentConfig) {
@@ -150,7 +173,7 @@ func createMCTS(config metrics.AgentConfig) *searcher.MCTS {
 		options = append(options, searcher.WithDuration(config.Duration))
 	}
 	if config.Cutoff > 0 {
-		options = append(options, searcher.WithCutoff(config.Cutoff))
+		options = append(options, searcher.WithCutoff(config.Cutoff, config.Evaluate.Get()))
 	}
 
 	options = append(options, searcher.WithMetrics())

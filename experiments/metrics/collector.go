@@ -5,14 +5,6 @@ import (
 	"time"
 )
 
-type AgentConfig struct {
-	ID         int
-	Goroutines int
-	Duration   time.Duration
-	Episodes   int
-	Cutoff     int
-}
-
 type SearchMetric struct {
 	Goroutines   int
 	Duration     time.Duration

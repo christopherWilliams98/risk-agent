@@ -2,9 +2,8 @@ package main
 
 import (
 	"os"
-	"time"
-
 	"risk/experiments"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"

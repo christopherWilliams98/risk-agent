@@ -813,10 +813,6 @@ func (gs GameState) AssignTerritoriesEqually(numPlayers, troopsPerTerritory int)
 	}
 }
 
-func (gs GameState) Evaluate() float64 {
-	return gs.evaluateBasic()
-}
-
 func IsMoveValidForPhase(phase Phase, move Move) bool {
 	gm, ok := move.(*GameMove)
 	if !ok {

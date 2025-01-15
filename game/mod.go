@@ -20,7 +20,8 @@ type State interface {
 	Play(Move) State
 	Hash() StateHash
 	Winner() string
-	// Evaluate returns a score between -1 and 1 indicating how favorable the
-	// current player's position is to a winning (positive) outcome.
-	Evaluate() float64
 }
+
+// Evaluates the game state to a score between -1 and 1 indicating how
+// favorable the current player's position is to a winning (positive) outcome.
+type Evaluate func(State) float64
