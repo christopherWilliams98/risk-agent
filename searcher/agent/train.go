@@ -3,9 +3,9 @@ package agent
 import (
 	"math"
 	"math/rand/v2"
+	"risk/experiments/metrics"
 	"risk/game"
 	"risk/searcher"
-	"risk/searcher/experiments"
 )
 
 type trainingAgent struct {
@@ -17,11 +17,11 @@ func NewTrainingAgent(mcts *searcher.MCTS) Agent {
 	return trainingAgent{mcts: mcts}
 }
 
-func (a trainingAgent) FindMove(state game.State, updates []searcher.Segment) (game.Move, experiments.SearchMetrics) {
-	policy, metrics := a.mcts.Simulate(state, updates)
+func (a trainingAgent) FindMove(state game.State, updates []searcher.Segment) (game.Move, metrics.SearchMetric) {
+	policy, searchMetrics := a.mcts.Simulate(state, updates)
 	// TODO: apply a temperature schedule as training progresses
 	policy = adjustTemperature(policy, 1.0)
-	return sample(policy), metrics
+	return sample(policy), searchMetrics
 }
 
 func adjustTemperature(policy map[game.Move]float64, temperature float64) map[game.Move]float64 {

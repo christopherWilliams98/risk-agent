@@ -1,8 +1,8 @@
 package searcher
 
 import (
+	"risk/experiments/metrics"
 	"risk/game"
-	"risk/searcher/experiments"
 	"sync"
 	"time"
 
@@ -22,7 +22,7 @@ type MCTS struct {
 	duration   time.Duration
 	cutoff     int
 	root       Node
-	metrics    experiments.MetricsCollector
+	metrics    metrics.Collector
 }
 
 func WithEpisodes(episodes int) Option {
@@ -45,7 +45,7 @@ func WithCutoff(depth int) Option {
 
 func WithMetrics() Option {
 	return func(m *MCTS) {
-		m.metrics = experiments.NewMetricsCollector()
+		m.metrics = metrics.NewCollector()
 	}
 }
 
@@ -53,7 +53,7 @@ func NewMCTS(goroutines int, options ...Option) *MCTS {
 	m := &MCTS{
 		goroutines: goroutines,
 		cutoff:     MaxCutoff,
-		metrics:    experiments.NewNoMetricsCollector(),
+		metrics:    metrics.NewDummyCollector(),
 	}
 	for _, option := range options {
 		option(m)
@@ -64,7 +64,7 @@ func NewMCTS(goroutines int, options ...Option) *MCTS {
 	return m
 }
 
-func (m *MCTS) Simulate(state game.State, lineage []Segment) (map[game.Move]float64, experiments.SearchMetrics) {
+func (m *MCTS) Simulate(state game.State, lineage []Segment) (map[game.Move]float64, metrics.SearchMetric) {
 	m.metrics.Start()
 
 	// Reuse subtree if possible
@@ -85,7 +85,7 @@ func (m *MCTS) Simulate(state game.State, lineage []Segment) (map[game.Move]floa
 	return policy, metrics
 }
 
-func iterate(goroutines int, episodes int, cutoff int, root Node, state game.State, metrics experiments.MetricsCollector) {
+func iterate(goroutines int, episodes int, cutoff int, root Node, state game.State, metrics metrics.Collector) {
 	task := make(chan any, episodes)
 	for i := 0; i < episodes; i++ {
 		task <- nil
@@ -108,7 +108,7 @@ func iterate(goroutines int, episodes int, cutoff int, root Node, state game.Sta
 	wg.Wait()
 }
 
-func countdown(goroutines int, duration time.Duration, cutoff int, root Node, state game.State, metrics experiments.MetricsCollector) {
+func countdown(goroutines int, duration time.Duration, cutoff int, root Node, state game.State, metrics metrics.Collector) {
 	var wg sync.WaitGroup
 	start := time.Now()
 
@@ -128,7 +128,7 @@ func countdown(goroutines int, duration time.Duration, cutoff int, root Node, st
 }
 
 // TODO: make function rather than method
-func (m *MCTS) findSubtree(path []Segment, state game.State, metrics experiments.MetricsCollector) Node {
+func (m *MCTS) findSubtree(path []Segment, state game.State, metrics metrics.Collector) Node {
 	gs := state.(*game.GameState)
 
 	if m.root == nil {
@@ -181,7 +181,7 @@ func (m *MCTS) findSubtree(path []Segment, state game.State, metrics experiments
 	return node
 }
 
-func simulate(root Node, state game.State, cutoff int, metrics experiments.MetricsCollector) {
+func simulate(root Node, state game.State, cutoff int, metrics metrics.Collector) {
 	newNode, newState := selectThenExpand(root, state)
 	player, score := rollout(newState, cutoff, metrics)
 	backup(newNode, player, score)
@@ -197,7 +197,7 @@ func selectThenExpand(root Node, state game.State) (Node, game.State) {
 	return child, state
 }
 
-func rollout(state game.State, cutoff int, metrics experiments.MetricsCollector) (string, float64) {
+func rollout(state game.State, cutoff int, metrics metrics.Collector) (string, float64) {
 	depth := 0
 	moves := state.LegalMoves()
 	// Rollout till game over or for cutoff number of moves
