@@ -18,22 +18,22 @@ type Segment struct {
 
 type MCTS struct {
 	goroutines int
-	episodes   int
 	duration   time.Duration
+	episodes   int
 	cutoff     int
 	root       Node
 	metrics    metrics.Collector
 }
 
-func WithEpisodes(episodes int) Option {
-	return func(u *MCTS) {
-		u.episodes = episodes
-	}
-}
-
 func WithDuration(duration time.Duration) Option {
 	return func(u *MCTS) {
 		u.duration = duration
+	}
+}
+
+func WithEpisodes(episodes int) Option {
+	return func(u *MCTS) {
+		u.episodes = episodes
 	}
 }
 
@@ -45,7 +45,7 @@ func WithCutoff(depth int) Option {
 
 func WithMetrics() Option {
 	return func(m *MCTS) {
-		m.metrics = metrics.NewCollector()
+		m.metrics = metrics.NewCollector(m.goroutines)
 	}
 }
 

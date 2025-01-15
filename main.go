@@ -15,5 +15,6 @@ func init() {
 }
 
 func main() {
-	experiments.RunThroughputExperiment()
+	// experiments.RunThroughputExperiment()
+	experiments.RunVolumeExperiment()
 }

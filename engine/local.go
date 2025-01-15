@@ -1,7 +1,7 @@
 package engine
 
 import (
-	"fmt"
+	// "fmt"
 	"time"
 
 	"risk/experiments/metrics"
@@ -77,7 +77,7 @@ func (e *Engine) Run() (string, metrics.GameMetric, []metrics.MoveMetric) {
 		})
 
 		// Debug print
-		fmt.Printf("[Engine.Run] Player %d chose move: %+v\n", currentPlayerID, move)
+		// fmt.Printf("[Engine.Run] Player %d chose move: %+v\n", currentPlayerID, move)
 
 		newState := e.State.Play(move).(*game.GameState)
 

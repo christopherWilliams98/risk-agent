@@ -14,6 +14,7 @@ type AgentConfig struct {
 }
 
 type SearchMetric struct {
+	Goroutines   int
 	Duration     time.Duration
 	Episodes     int
 	FullPlayouts int
@@ -44,13 +45,14 @@ type Collector interface {
 
 type collector struct {
 	startTime    time.Time
+	goroutines   int
 	episodes     atomic.Int32
 	fullPlayouts atomic.Int32
 	isTreeReused bool
 }
 
-func NewCollector() Collector {
-	return &collector{}
+func NewCollector(goroutines int) Collector {
+	return &collector{goroutines: goroutines}
 }
 
 func (m *collector) Start() {
@@ -71,6 +73,7 @@ func (m *collector) ReusedTree() {
 
 func (m *collector) Complete() SearchMetric {
 	return SearchMetric{
+		Goroutines:   m.goroutines,
 		Duration:     time.Since(m.startTime),
 		Episodes:     int(m.episodes.Load()),
 		FullPlayouts: int(m.fullPlayouts.Load()),

@@ -12,8 +12,9 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const NumGames = 2 // Per match up
+
 func RunThroughputExperiment() {
-	const NumGames = 1 // Per match up
 	const Duration = 10 * time.Millisecond
 	configs := []metrics.AgentConfig{
 		{ID: 1, Goroutines: 1, Duration: Duration},
@@ -25,15 +26,42 @@ func RunThroughputExperiment() {
 		{ID: 7, Goroutines: 64, Duration: Duration},
 		{ID: 8, Goroutines: 128, Duration: Duration},
 	}
-	// Same config for both players in each game
+
+	// Each matchup uses the same config for both players
 	// for the same playing strength and similar game length
-	matchUps := [][]metrics.AgentConfig{
-		{configs[0], configs[0]},
-		{configs[1], configs[1]},
+	matchUps := [][]metrics.AgentConfig{}
+	for _, config := range configs {
+		matchUps = append(matchUps, []metrics.AgentConfig{config, config})
 	}
 
+	// parallelization -> throughput: goroutines -> episodes/duration
+	runExperiment("parallelization", configs, matchUps)
+}
+
+func RunVolumeExperiment() {
+	const Goroutines = 32
+	// TODO: based on throughput experiment
+	configs := []metrics.AgentConfig{
+		{ID: 1, Goroutines: Goroutines, Episodes: 10},
+		{ID: 1, Goroutines: Goroutines, Episodes: 50},
+		{ID: 1, Goroutines: Goroutines, Episodes: 100},
+	}
+
+	// Each matchup pairs two different configs
+	matchUps := [][]metrics.AgentConfig{}
+	for i, config1 := range configs {
+		for _, config2 := range configs[i+1:] {
+			matchUps = append(matchUps, []metrics.AgentConfig{config1, config2})
+		}
+	}
+
+	// volume -> playing strength: episodes/search -> win rate/Elo rating
+	runExperiment("volume", configs, matchUps)
+}
+
+func runExperiment(name string, configs []metrics.AgentConfig, matchUps [][]metrics.AgentConfig) {
 	// Store experiment metadata
-	writer, err := metrics.NewWriter()
+	writer, err := metrics.NewWriter(name)
 	if err != nil {
 		panic(fmt.Sprintf("failed to create experiment writer: %v", err))
 	}
@@ -42,13 +70,14 @@ func RunThroughputExperiment() {
 	if err != nil {
 		panic(fmt.Sprintf("failed to store agent configs: %v", err))
 	}
+	log.Info().Msg("stored agent configs")
 
 	// Run a number of games for each matchup
 	count := 0
 	gameRecords := []metrics.GameRecord{}
 	moveRecords := []metrics.MoveRecord{}
 
-	log.Info().Msg("starting speedup experiment...")
+	log.Info().Msgf("starting %s experiment...", name)
 
 	for _, matchup := range matchUps {
 		config1 := matchup[0]
@@ -79,7 +108,7 @@ func RunThroughputExperiment() {
 		log.Info().Msg("completed matchup")
 	}
 
-	log.Info().Msg("completed speedup experiment")
+	log.Info().Msgf("completed %s experiment", name)
 
 	// Store experiment results
 	err = writer.WriteGameRecords(gameRecords)
