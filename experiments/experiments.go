@@ -65,7 +65,7 @@ func RunVolumeExperiment() {
 func RunCutoffExperiment() {
 	// TODO: cutoff based on volume experiment game length quartiles
 	configs := []metrics.AgentConfig{
-		{ID: 1, Goroutines: Goroutines, Episodes: Episodes}, // Full playout
+		{ID: 1, Goroutines: Goroutines, Episodes: Episodes}, // Without cutoff (full playout)
 		{ID: 2, Goroutines: Goroutines, Episodes: Episodes, Cutoff: 10},
 		{ID: 3, Goroutines: Goroutines, Episodes: Episodes, Cutoff: 50},
 	}
@@ -102,11 +102,11 @@ func runExperiment(name string, configs []metrics.AgentConfig, matchUps [][]metr
 
 	log.Info().Msgf("starting %s experiment...", name)
 
-	for _, matchup := range matchUps {
+	for mi, matchup := range matchUps {
 		config1 := matchup[0]
 		config2 := matchup[1]
 
-		log.Info().Msgf("starting matchup between agent1=%+v and agent2=%+v...", config1, config2)
+		log.Info().Msgf("starting matchup %d of %d between agent1=%+v and agent2=%+v...", mi+1, len(matchUps), config1, config2)
 
 		for i := 0; i < NumGames; i++ {
 			log.Info().Msgf("starting game %d of %d...", i+1, NumGames)
@@ -128,7 +128,7 @@ func runExperiment(name string, configs []metrics.AgentConfig, matchUps [][]metr
 
 			log.Info().Msgf("completed game %d with winner: %s", i+1, winner)
 		}
-		log.Info().Msg("completed matchup")
+		log.Info().Msgf("completed matchup %d of %d", mi+1, len(matchUps))
 	}
 
 	log.Info().Msgf("completed %s experiment", name)
@@ -173,9 +173,10 @@ func createMCTS(config metrics.AgentConfig) *searcher.MCTS {
 		options = append(options, searcher.WithDuration(config.Duration))
 	}
 	if config.Cutoff > 0 {
-		options = append(options, searcher.WithCutoff(config.Cutoff, config.Evaluate.Get()))
+		options = append(options, searcher.WithCutoff(config.Cutoff))
 	}
 
+	options = append(options, searcher.WithEvaluationFn(config.Evaluate.Get()))
 	options = append(options, searcher.WithMetrics())
 	return searcher.NewMCTS(config.Goroutines, options...)
 }

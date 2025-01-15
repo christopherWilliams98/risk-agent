@@ -38,14 +38,15 @@ func WithEpisodes(episodes int) Option {
 	}
 }
 
-func WithCutoff(depth int, evaluate game.Evaluate) Option {
+func WithCutoff(depth int) Option {
 	return func(u *MCTS) {
 		u.cutoff = depth
-		if evaluate == nil {
-			u.evaluate = game.EvaluateResources
-		} else {
-			u.evaluate = evaluate
-		}
+	}
+}
+
+func WithEvaluationFn(evaluate game.Evaluate) Option {
+	return func(m *MCTS) {
+		m.evaluate = evaluate
 	}
 }
 
@@ -59,6 +60,7 @@ func NewMCTS(goroutines int, options ...Option) *MCTS {
 	m := &MCTS{
 		goroutines: goroutines,
 		cutoff:     MaxCutoff,
+		evaluate:   game.EvaluateResources,
 		metrics:    metrics.NewDummyCollector(),
 	}
 	for _, option := range options {
