@@ -175,8 +175,10 @@ func createMCTS(config metrics.AgentConfig) *searcher.MCTS {
 	if config.Cutoff > 0 {
 		options = append(options, searcher.WithCutoff(config.Cutoff))
 	}
+	if config.Evaluate != nil {
+		options = append(options, searcher.WithEvaluationFn(config.Evaluate))
+	}
 
-	options = append(options, searcher.WithEvaluationFn(config.Evaluate.Get()))
 	options = append(options, searcher.WithMetrics())
 	return searcher.NewMCTS(config.Goroutines, options...)
 }

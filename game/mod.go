@@ -1,6 +1,6 @@
 package game
 
-// TODO: move type definitions to corresponding files then delete this file
+// TODO: interface should be defined in searcher package, any game that aims to be playable by an MCTS agent should implement this interface (i.e. searcher package is standalone, game package imports it, engine package imports both)
 
 type Move interface {
 	IsStochastic() bool

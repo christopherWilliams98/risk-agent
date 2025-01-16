@@ -4,40 +4,14 @@ import (
 	"encoding/csv"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
+	"reflect"
 	"risk/game"
+	"runtime"
 	"strconv"
 	"time"
 )
-
-type EvalFn int
-
-const (
-	Resources EvalFn = iota
-	BorderStrength
-)
-
-func (e EvalFn) String() string {
-	switch e {
-	case Resources:
-		return "resources"
-	case BorderStrength:
-		return "borderStrength"
-	default:
-		return "default"
-	}
-}
-
-func (e EvalFn) Get() game.Evaluate {
-	switch e {
-	case Resources:
-		return game.EvaluateResources
-	case BorderStrength:
-		return game.EvaluateBorderStrength
-	default:
-		return nil
-	}
-}
 
 type AgentConfig struct {
 	ID         int
@@ -45,7 +19,7 @@ type AgentConfig struct {
 	Duration   time.Duration
 	Episodes   int
 	Cutoff     int
-	Evaluate   EvalFn
+	Evaluate   game.Evaluate
 }
 
 type GameRecord struct {
@@ -105,7 +79,7 @@ func (w *Writer) WriteAgentConfigs(configs []AgentConfig) error {
 			config.Duration.String(),
 			strconv.Itoa(config.Episodes),
 			strconv.Itoa(config.Cutoff),
-			config.Evaluate.String(),
+			getFnName(config.Evaluate),
 		}
 		err = writer.Write(row)
 		if err != nil {
@@ -169,7 +143,7 @@ func (w *Writer) WriteMoveRecords(records []MoveRecord) error {
 	defer writer.Flush()
 
 	// Write header
-	header := []string{"game", "step", "player", "goroutines", "duration", "episodes", "full_playouts", "is_tree_reused"}
+	header := []string{"game", "step", "player", "goroutines", "duration", "episodes", "full_playouts", "cutoff", "evaluation", "is_tree_reused"}
 	err = writer.Write(header)
 	if err != nil {
 		return fmt.Errorf("failed to write move records header: %w", err)
@@ -185,6 +159,8 @@ func (w *Writer) WriteMoveRecords(records []MoveRecord) error {
 			record.Duration.String(),
 			strconv.Itoa(record.Episodes),
 			strconv.Itoa(record.FullPlayouts),
+			strconv.Itoa(record.Cutoff),
+			getFnName(record.Evaluate),
 			strconv.FormatBool(record.IsTreeReused),
 		}
 		err = writer.Write(row)
@@ -194,4 +170,9 @@ func (w *Writer) WriteMoveRecords(records []MoveRecord) error {
 	}
 
 	return nil
+}
+
+func getFnName(fn any) string {
+	name := runtime.FuncForPC(reflect.ValueOf(fn).Pointer()).Name()
+	return path.Base(name)
 }

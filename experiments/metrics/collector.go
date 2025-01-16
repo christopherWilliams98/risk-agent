@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"risk/game"
 	"sync/atomic"
 	"time"
 )
@@ -9,6 +10,8 @@ type SearchMetric struct {
 	Goroutines   int
 	Duration     time.Duration
 	Episodes     int
+	Cutoff       int
+	Evaluate     game.Evaluate
 	FullPlayouts int
 	IsTreeReused bool
 }
@@ -28,27 +31,36 @@ type GameMetric struct {
 }
 
 type Collector interface {
-	Start()
+	Start(goroutines, cutoff int, evaluate game.Evaluate)
+	ReusedTree()
 	AddFullPlayout()
 	AddEpisode()
-	ReusedTree()
 	Complete() SearchMetric
 }
 
 type collector struct {
-	startTime    time.Time
 	goroutines   int
+	cutoff       int
+	evaluate     game.Evaluate
+	startTime    time.Time
 	episodes     atomic.Int32
 	fullPlayouts atomic.Int32
 	isTreeReused bool
 }
 
-func NewCollector(goroutines int) Collector {
-	return &collector{goroutines: goroutines}
+func NewCollector() Collector {
+	return &collector{}
 }
 
-func (m *collector) Start() {
+func (m *collector) Start(goroutines, cutoff int, evaluate game.Evaluate) {
 	m.startTime = time.Now()
+	m.goroutines = goroutines
+	m.cutoff = cutoff
+	m.evaluate = evaluate
+}
+
+func (m *collector) ReusedTree() {
+	m.isTreeReused = true
 }
 
 func (m *collector) AddFullPlayout() {
@@ -59,16 +71,14 @@ func (m *collector) AddEpisode() {
 	m.episodes.Add(1)
 }
 
-func (m *collector) ReusedTree() {
-	m.isTreeReused = true
-}
-
 func (m *collector) Complete() SearchMetric {
 	return SearchMetric{
 		Goroutines:   m.goroutines,
 		Duration:     time.Since(m.startTime),
 		Episodes:     int(m.episodes.Load()),
 		FullPlayouts: int(m.fullPlayouts.Load()),
+		Cutoff:       m.cutoff,
+		Evaluate:     m.evaluate,
 		IsTreeReused: m.isTreeReused,
 	}
 }
@@ -79,8 +89,8 @@ func NewDummyCollector() Collector {
 	return &dummyCollector{}
 }
 
-func (m *dummyCollector) Start()                 {}
-func (m *dummyCollector) AddFullPlayout()        {}
-func (m *dummyCollector) AddEpisode()            {}
-func (m *dummyCollector) ReusedTree()            {}
-func (m *dummyCollector) Complete() SearchMetric { return SearchMetric{} }
+func (m *dummyCollector) Start(goroutines, cutoff int, evaluate game.Evaluate) {}
+func (m *dummyCollector) ReusedTree()                                          {}
+func (m *dummyCollector) AddFullPlayout()                                      {}
+func (m *dummyCollector) AddEpisode()                                          {}
+func (m *dummyCollector) Complete() SearchMetric                               { return SearchMetric{} }

@@ -28,31 +28,39 @@ type MCTS struct {
 
 func WithDuration(duration time.Duration) Option {
 	return func(u *MCTS) {
-		u.duration = duration
+		if duration > 0 {
+			u.duration = duration
+		}
 	}
 }
 
 func WithEpisodes(episodes int) Option {
 	return func(u *MCTS) {
-		u.episodes = episodes
+		if episodes > 0 {
+			u.episodes = episodes
+		}
 	}
 }
 
 func WithCutoff(depth int) Option {
 	return func(u *MCTS) {
-		u.cutoff = depth
+		if depth > 0 {
+			u.cutoff = depth
+		}
 	}
 }
 
 func WithEvaluationFn(evaluate game.Evaluate) Option {
 	return func(m *MCTS) {
-		m.evaluate = evaluate
+		if evaluate != nil {
+			m.evaluate = evaluate
+		}
 	}
 }
 
 func WithMetrics() Option {
 	return func(m *MCTS) {
-		m.metrics = metrics.NewCollector(m.goroutines)
+		m.metrics = metrics.NewCollector()
 	}
 }
 
@@ -73,7 +81,7 @@ func NewMCTS(goroutines int, options ...Option) *MCTS {
 }
 
 func (m *MCTS) Simulate(state game.State, lineage []Segment) (map[game.Move]float64, metrics.SearchMetric) {
-	m.metrics.Start()
+	m.metrics.Start(m.goroutines, m.cutoff, m.evaluate)
 
 	// Reuse subtree if possible
 	m.root = m.findSubtree(lineage, state, m.metrics)

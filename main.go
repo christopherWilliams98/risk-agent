@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+
 	"risk/experiments"
 	"time"
 
@@ -14,7 +15,7 @@ func init() {
 }
 
 func main() {
-	// experiments.RunThroughputExperiment()
+	experiments.RunParallelizationExperiment()
 	// experiments.RunVolumeExperiment()
-	experiments.RunCutoffExperiment()
+	// experiments.RunCutoffExperiment()
 }
