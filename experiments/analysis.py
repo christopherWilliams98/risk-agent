@@ -236,7 +236,7 @@ def plot_elo_ratings(ratings: Dict[int, float], agent_configs: pd.DataFrame, out
         marker="o",
         linestyle="-",
         linewidth=2,
-        label="Parallel Agents"
+        # label="Parallel Agents"
     )
 
     plt.title("Elo Rating vs Concurrency Level")
@@ -250,7 +250,7 @@ def plot_elo_ratings(ratings: Dict[int, float], agent_configs: pd.DataFrame, out
     plt.axhline(y=1500, color="gray", linestyle="--", alpha=0.5, label="Initial Rating")
 
     # Add baseline rating line
-    plt.axhline(y=baseline_rating, color="r", linestyle="--", alpha=0.5, label="Baseline Agent")
+    # plt.axhline(y=baseline_rating, color="r", linestyle="--", alpha=0.5, label="Baseline Agent")
 
     plt.legend()
     plt.grid(True)

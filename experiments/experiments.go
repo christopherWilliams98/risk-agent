@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	NumGames   = 30 // Per match up
+	NumGames   = 10 // Per match up
 	Duration   = 10 * time.Millisecond
 	Goroutines = 32  // TODO: based on throughput experiment
 	Episodes   = 100 // TODO: based on volume experiment
