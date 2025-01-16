@@ -13,53 +13,43 @@ import (
 )
 
 const (
-	NumGames   = 10  // Per match up
+	NumGames   = 30 // Per match up
+	Duration   = 10 * time.Millisecond
 	Goroutines = 32  // TODO: based on throughput experiment
 	Episodes   = 100 // TODO: based on volume experiment
 )
 
-func RunParallelizationExperiment() {
-	const Duration = 10 * time.Millisecond
-	configs := []metrics.AgentConfig{
-		{ID: 1, Goroutines: 1, Duration: Duration},
-		// {ID: 2, Goroutines: 2, Duration: Duration},
-		// {ID: 3, Goroutines: 4, Duration: Duration},
-		{ID: 4, Goroutines: 8, Duration: Duration},
-		// {ID: 5, Goroutines: 16, Duration: Duration},
-		// {ID: 6, Goroutines: 32, Duration: Duration},
-		{ID: 7, Goroutines: 64, Duration: Duration},
-		{ID: 8, Goroutines: 128, Duration: Duration},
-	}
+var parallelizationConfigs = []metrics.AgentConfig{
+	{ID: 1, Goroutines: 1, Duration: Duration},
+	{ID: 2, Goroutines: 4, Duration: Duration},
+	{ID: 3, Goroutines: 8, Duration: Duration},
+	{ID: 4, Goroutines: 16, Duration: Duration},
+	{ID: 5, Goroutines: 32, Duration: Duration},
+	{ID: 6, Goroutines: 64, Duration: Duration},
+	{ID: 7, Goroutines: 128, Duration: Duration},
+}
 
+func RunParallelizationToThroughput() {
 	// Each matchup uses the same config for both players
 	// for the same playing strength and similar game length
 	matchUps := [][]metrics.AgentConfig{}
-	for _, config := range configs {
+	for _, config := range parallelizationConfigs {
 		matchUps = append(matchUps, []metrics.AgentConfig{config, config})
 	}
 
-	// parallelization -> throughput: goroutines -> episodes/duration
-	runExperiment("parallelization", configs, matchUps)
+	runExperiment("parallelization_to_throughput", parallelizationConfigs, matchUps)
 }
 
-func RunVolumeExperiment() {
-	// TODO: episodes based on throughput experiment
-	configs := []metrics.AgentConfig{
-		{ID: 1, Goroutines: Goroutines, Episodes: 10},
-		{ID: 2, Goroutines: Goroutines, Episodes: 50},
-		{ID: 3, Goroutines: Goroutines, Episodes: 100},
-	}
+func RunParallelizationToStrength() {
+	baseline := metrics.AgentConfig{ID: 0, Goroutines: 1, Duration: Duration}
 
-	// Each matchup pairs two different configs
+	// Each matchup pairs an agent against the baseline sequential agent
 	matchUps := [][]metrics.AgentConfig{}
-	for i, config1 := range configs {
-		for _, config2 := range configs[i+1:] {
-			matchUps = append(matchUps, []metrics.AgentConfig{config1, config2})
-		}
+	for _, config := range parallelizationConfigs {
+		matchUps = append(matchUps, []metrics.AgentConfig{baseline, config})
 	}
 
-	// volume -> playing strength: episodes/search -> win rate/Elo rating
-	runExperiment("volume", configs, matchUps)
+	runExperiment("parallelization_to_strength", append(parallelizationConfigs, baseline), matchUps)
 }
 
 func RunCutoffExperiment() {
@@ -83,18 +73,6 @@ func RunCutoffExperiment() {
 }
 
 func runExperiment(name string, configs []metrics.AgentConfig, matchUps [][]metrics.AgentConfig) {
-	// Store experiment metadata
-	writer, err := metrics.NewWriter(name)
-	if err != nil {
-		panic(fmt.Sprintf("failed to create experiment writer: %v", err))
-	}
-
-	err = writer.WriteAgentConfigs(configs)
-	if err != nil {
-		panic(fmt.Sprintf("failed to store agent configs: %v", err))
-	}
-	log.Info().Msg("stored agent configs")
-
 	// Run a number of games for each matchup
 	count := 0
 	gameRecords := []metrics.GameRecord{}
@@ -132,6 +110,19 @@ func runExperiment(name string, configs []metrics.AgentConfig, matchUps [][]metr
 	}
 
 	log.Info().Msgf("completed %s experiment", name)
+
+	// TODO: extract into function
+	// Store experiment metadata
+	writer, err := metrics.NewWriter(name)
+	if err != nil {
+		panic(fmt.Sprintf("failed to create experiment writer: %v", err))
+	}
+
+	err = writer.WriteAgentConfigs(configs)
+	if err != nil {
+		panic(fmt.Sprintf("failed to store agent configs: %v", err))
+	}
+	log.Info().Msg("stored agent configs")
 
 	// Store experiment results
 	err = writer.WriteGameRecords(gameRecords)
