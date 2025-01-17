@@ -20,11 +20,11 @@ def load_experiment_data(experiment_dir):
     game_records = pd.read_csv(Path(latest_dir) / "game_records.csv")
     move_records = pd.read_csv(Path(latest_dir) / "move_records.csv")
 
-    # Create results directory if it doesn't exist
-    results_dir = Path(latest_dir) / "results"
-    results_dir.mkdir(parents=True, exist_ok=True)
+    # Create output directory to store plots
+    output_dir = Path(latest_dir) / "output"
+    output_dir.mkdir(parents=True, exist_ok=True)
 
-    return agent_configs, game_records, move_records, results_dir
+    return agent_configs, game_records, move_records, output_dir
 
 
 def plot_episodes_by_step(move_records, agent_configs, output_dir):
@@ -110,32 +110,49 @@ def plot_episodes_boxplot(move_records, agent_configs, output_dir):
 def calculate_win_rates(
     game_records: pd.DataFrame, agent_configs: pd.DataFrame
 ) -> pd.DataFrame:
-    """Calculate win rates for each agent against the baseline agent."""
-    # Group by Agent2 (the varying concurrency agent)
+    """Calculate win rates for each experiment agent against the baseline agent."""
+    # Group by the experiment agents of different configuration parameters
     results = (
         game_records.groupby("agent2")
         .agg(
             {
                 "id": "count",  # Total games
-                "winner": lambda x: sum(x == "Player2"),  # Wins by Agent2 agent
+                "winner": lambda x: sum(x == "Player2"),  # Wins by experiment agent 
             }
         )
         .reset_index()
     )
 
-    # Calculate win rate
-    results["win_rate"] = results["winner"] / results["id"]
+    results.columns = ["agent2", "games", "wins"] # TODO: rename during agg()
+    results["win_rate"] = results["wins"] / results["games"]
 
-    # Merge with agent configs to get goroutines info
+    # Merge with agent configs to get configuration parameters
     results = results.merge(
-        agent_configs[["id", "goroutines"]], left_on="agent2", right_on="id"
+        agent_configs,
+        left_on="agent2",
+        right_on="id",
+        how="left"
     )
+    
+    return results
 
-    return results[["goroutines", "win_rate"]]
 
-
-def plot_win_rates(win_rates: pd.DataFrame, output_dir: Path) -> plt.Figure:
-    """Plot win rates against concurrency level."""
+def plot_win_rates(
+    win_rates: pd.DataFrame, 
+    param_col: str, 
+    output_dir: Path,
+    title: str = None,  
+    xlabel: str = None,  
+) -> plt.Figure:
+    """Plot win rates against the varying configuration parameter.
+    
+    Args:
+        win_rates: DataFrame containing win rates and configuration parameters
+        param_col: Name of column containing the configuration parameter
+        output_dir: Directory to save plot
+        title: Optional custom title (default: "Win Rate vs {param_col}")
+        xlabel: Optional custom x-axis label (default: param_col)
+    """
     plt.figure(figsize=(10, 6))
 
     # Create evenly spaced x-axis positions
@@ -149,23 +166,26 @@ def plot_win_rates(win_rates: pd.DataFrame, output_dir: Path) -> plt.Figure:
         linewidth=2,
     )
 
-    plt.title("Win Rate vs Concurrency Level")
-    plt.xlabel("Number of Goroutines")
+    # Set title and labels
+    plt.title(title or f"Win Rate vs {param_col.title()}")
+    plt.xlabel(xlabel or param_col.title())
     plt.ylabel("Win Rate Against Baseline Agent")
 
     # Set x-axis ticks and labels
-    plt.xticks(x_positions, win_rates["goroutines"])
+    x_labels = win_rates[param_col]
+    plt.xticks(x_positions, x_labels)
 
     # Add 50% line to show baseline performance
     plt.axhline(y=0.5, color="r", linestyle="--", alpha=0.5)
 
     plt.grid(True)
+    plt.legend()
     plt.savefig(Path(output_dir) / "win_rates.png")
     return plt
 
 
 def calculate_elo_ratings(
-    game_records: pd.DataFrame, K: float = 24.0
+    game_records: pd.DataFrame, K: float = 16.0
 ) -> Dict[int, float]:
     """Calculate Elo ratings for all agents after playing all games.
 
@@ -176,6 +196,7 @@ def calculate_elo_ratings(
     Returns:
         Dictionary mapping agent IDs to their final Elo ratings
     """
+    # TODO: initialize at 1200?
     # Initialize ratings for all agents (including baseline) at 1500
     ratings = {
         agent_id: 1500.0
@@ -186,8 +207,9 @@ def calculate_elo_ratings(
 
     # Shuffle games randomly to minimize ordering effects on final ratings
     shuffled_games = game_records.sample(
-        frac=1.0, random_state=42
-    )  # random_state for reproducibility
+        frac=1.0, 
+        # random_state=12 # TODO fix random_state for reproducibility
+    )
 
     # Update ratings by game outcomes in random order
     for _, game in shuffled_games.iterrows():
