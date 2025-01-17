@@ -52,24 +52,51 @@ func RunParallelizationToStrength() {
 	runExperiment("parallelization_to_strength", append(parallelConfigs, baseline), matchUps)
 }
 
+// TODO: get SelectedConcurrency-goroutine game length distribution/quartiles
+const (
+	SelectedConcurrency = 8
+	LowCutoff           = 10
+	LowerQuartileLength = 75
+	MedianLength        = 150
+	UpperQuartileLength = 200
+)
+
 func RunCutoffExperiment() {
-	// TODO: get 8-goroutine game length distribution/quartiles
-	baseline := metrics.AgentConfig{ID: 0, Goroutines: 8, Duration: TimeBudget} // Without cutoff (full playout)
-	cutoffConfigs := []metrics.AgentConfig{
+	baseline := metrics.AgentConfig{ID: 0, Goroutines: SelectedConcurrency, Duration: TimeBudget} // Without cutoff (full playout)
+	expConfigs := []metrics.AgentConfig{
 		{ID: 1, Goroutines: baseline.Goroutines, Duration: baseline.Duration}, // Baseline equivalent
-		{ID: 2, Goroutines: baseline.Goroutines, Duration: baseline.Duration, Cutoff: 10},
-		{ID: 3, Goroutines: baseline.Goroutines, Duration: baseline.Duration, Cutoff: 75},  // Lower quartile
-		{ID: 4, Goroutines: baseline.Goroutines, Duration: baseline.Duration, Cutoff: 150}, // Median
-		{ID: 5, Goroutines: baseline.Goroutines, Duration: baseline.Duration, Cutoff: 200}, // Upper quartile
+		{ID: 2, Goroutines: baseline.Goroutines, Duration: baseline.Duration, Cutoff: LowCutoff, Evaluate: game.EvaluateResources},
+		{ID: 3, Goroutines: baseline.Goroutines, Duration: baseline.Duration, Cutoff: LowerQuartileLength, Evaluate: game.EvaluateResources},
+		{ID: 4, Goroutines: baseline.Goroutines, Duration: baseline.Duration, Cutoff: MedianLength, Evaluate: game.EvaluateResources},
+		{ID: 5, Goroutines: baseline.Goroutines, Duration: baseline.Duration, Cutoff: UpperQuartileLength, Evaluate: game.EvaluateResources},
 	}
 
-	// Each matchup pairs the baseline agent against a cutoff agent
-	matchUps := [][]metrics.AgentConfig{}
-	for _, config := range cutoffConfigs {
+	// Each matchup pairs the baseline agent against an experiment agent
+	var matchUps [][]metrics.AgentConfig
+	for _, config := range expConfigs {
 		matchUps = append(matchUps, []metrics.AgentConfig{baseline, config})
 	}
 
-	runExperiment("cutoff", cutoffConfigs, matchUps)
+	runExperiment("cutoff", expConfigs, matchUps)
+}
+
+func RunEvaluationExperiment() {
+	baseline := metrics.AgentConfig{ID: 0, Goroutines: SelectedConcurrency, Duration: TimeBudget} // Without cutoff (full playout)
+	expConfigs := []metrics.AgentConfig{
+		{ID: 1, Goroutines: baseline.Goroutines, Duration: baseline.Duration}, // Baseline equivalent
+		{ID: 2, Goroutines: baseline.Goroutines, Duration: baseline.Duration, Cutoff: LowCutoff, Evaluate: game.EvaluateBorderStrength},
+		{ID: 3, Goroutines: baseline.Goroutines, Duration: baseline.Duration, Cutoff: LowerQuartileLength, Evaluate: game.EvaluateBorderStrength},
+		{ID: 4, Goroutines: baseline.Goroutines, Duration: baseline.Duration, Cutoff: MedianLength, Evaluate: game.EvaluateBorderStrength},
+		{ID: 5, Goroutines: baseline.Goroutines, Duration: baseline.Duration, Cutoff: UpperQuartileLength, Evaluate: game.EvaluateBorderStrength},
+	}
+
+	// Each matchup pairs the baseline agent against an experiment agent
+	var matchUps [][]metrics.AgentConfig
+	for _, config := range expConfigs {
+		matchUps = append(matchUps, []metrics.AgentConfig{baseline, config})
+	}
+
+	runExperiment("evaluation", expConfigs, matchUps)
 }
 
 func runExperiment(name string, configs []metrics.AgentConfig, matchUps [][]metrics.AgentConfig) {
