@@ -41,7 +41,7 @@ func RunParallelizationToThroughput() {
 
 // TODO: rename RunParallelizationExperiment()
 func RunParallelizationToStrength() {
-	// Each matchup pairs an agent against the baseline sequential agent
+	// Pairs the baseline agent against each experiment agent
 	baseline := metrics.AgentConfig{ID: 0, Goroutines: 1, Duration: TimeBudget}
 	matchUps := [][]metrics.AgentConfig{}
 	for _, config := range parallelConfigs {
@@ -52,7 +52,7 @@ func RunParallelizationToStrength() {
 	runExperiment("parallelization_to_strength", append(parallelConfigs, baseline), matchUps)
 }
 
-// TODO: get SelectedConcurrency-goroutine game length distribution/quartiles
+// TODO: get SelectedConcurrency-goroutine's game length distribution/quartiles
 const (
 	SelectedConcurrency = 8
 	LowCutoff           = 10
@@ -71,7 +71,7 @@ func RunCutoffExperiment() {
 		{ID: 5, Goroutines: baseline.Goroutines, Duration: baseline.Duration, Cutoff: UpperQuartileLength, Evaluate: game.EvaluateResources},
 	}
 
-	// Each matchup pairs the baseline agent against an experiment agent
+	// Pairs the baseline agent against each experiment agent
 	var matchUps [][]metrics.AgentConfig
 	for _, config := range expConfigs {
 		matchUps = append(matchUps, []metrics.AgentConfig{baseline, config})
@@ -90,13 +90,34 @@ func RunEvaluationExperiment() {
 		{ID: 5, Goroutines: baseline.Goroutines, Duration: baseline.Duration, Cutoff: UpperQuartileLength, Evaluate: game.EvaluateBorderStrength},
 	}
 
-	// Each matchup pairs the baseline agent against an experiment agent
+	// Pairs the baseline agent against each experiment agent
 	var matchUps [][]metrics.AgentConfig
 	for _, config := range expConfigs {
 		matchUps = append(matchUps, []metrics.AgentConfig{baseline, config})
 	}
 
 	runExperiment("evaluation", expConfigs, matchUps)
+}
+
+const StrongestCutoff = LowCutoff // TODO: pick cutoff depth with the highest playing strength from cutoff experiment
+
+func RunEloExperiment() {
+	configs := []metrics.AgentConfig{
+		{ID: 1, Goroutines: 1, Duration: TimeBudget},
+		{ID: 2, Goroutines: SelectedConcurrency, Duration: TimeBudget},
+		{ID: 3, Goroutines: SelectedConcurrency, Duration: TimeBudget, Cutoff: StrongestCutoff, Evaluate: game.EvaluateResources},
+		{ID: 4, Goroutines: SelectedConcurrency, Duration: TimeBudget, Cutoff: StrongestCutoff, Evaluate: game.EvaluateBorderStrength},
+	}
+
+	// Run games between each pair of agents in round-robin
+	matchUps := [][]metrics.AgentConfig{}
+	for i, config1 := range configs {
+		for _, config2 := range configs[i+1:] {
+			matchUps = append(matchUps, []metrics.AgentConfig{config1, config2})
+		}
+	}
+
+	runExperiment("elo", configs, matchUps)
 }
 
 func runExperiment(name string, configs []metrics.AgentConfig, matchUps [][]metrics.AgentConfig) {
