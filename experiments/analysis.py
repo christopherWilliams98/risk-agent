@@ -7,6 +7,7 @@ import numpy as np
 from typing import List, Dict, Generator
 import random
 import matplotlib.animation as animation
+import math
 
 
 def load_experiment_data(experiment_dir):
@@ -257,3 +258,218 @@ def plot_combined_win_rates(
     plt.legend()
     plt.savefig(Path(output_dir) / "combined_win_rates.png")
     return plt
+
+
+def calculate_k_factor(num_games: int) -> float:
+    """Calculate K-factor with exponential decay from 32 to 16.
+    
+    Args:
+        num_games: Number of games played by agent
+        
+    Returns:
+        K-factor between 32 (initial) and 16 (minimum)
+    """
+    K_START = 32.0
+    K_END = 16.0
+    # Decay constant controls how quickly K approaches K_END
+    # With -0.01, reaches ~95% of decay after 300 games
+    DECAY_RATE = -0.01
+    
+    decay = math.exp(DECAY_RATE * num_games)
+    k_factor = K_END + (K_START - K_END) * decay
+    return k_factor
+
+
+def calculate_elo_updates(game_records: pd.DataFrame, seed: int = 42) -> pd.DataFrame:
+    """Calculate Elo rating updates with exponentially decaying K-factor."""
+    # Initialize ratings at 1500
+    ratings = {agent_id: 1500.0 for agent_id in pd.unique(game_records[['agent1', 'agent2']].values.ravel())}
+    ratings_history = []
+    games_played = {agent_id: 0 for agent_id in ratings.keys()}
+    
+    # Process each game in random order - sample ONCE before the loop
+    randomized_games = game_records.sample(frac=1, random_state=seed)  # Fixed seed for reproducibility
+    
+    for _, game in randomized_games.iterrows():
+        # Get current ratings
+        rating1 = ratings[game.agent1]
+        rating2 = ratings[game.agent2]
+        
+        # Calculate expected scores
+        expected1 = 1 / (1 + 10**((rating2 - rating1) / 400))
+        expected2 = 1 - expected1
+        
+        # Get actual scores (1 for win, 0 for loss)
+        actual1 = 1 if game.winner == "Player1" else 0
+        actual2 = 1 - actual1
+        
+        # Calculate K-factors based on games played
+        k1 = calculate_k_factor(games_played[game.agent1])
+        k2 = calculate_k_factor(games_played[game.agent2])
+        
+        # Update ratings
+        ratings[game.agent1] += k1 * (actual1 - expected1)
+        ratings[game.agent2] += k2 * (actual2 - expected2)
+        
+        # Track games played
+        games_played[game.agent1] += 1
+        games_played[game.agent2] += 1
+        
+        # Store ratings snapshot
+        ratings_history.append(ratings.copy())
+    
+    # Convert history to DataFrame
+    return pd.DataFrame(ratings_history)
+
+
+def plot_elo_progression(ratings_df: pd.DataFrame, agent_configs: pd.DataFrame, output_dir: Path):
+    """Create a static line plot showing Elo rating progression over time.
+    
+    Args:
+        ratings_df: DataFrame containing Elo rating history
+        agent_configs: DataFrame containing agent configurations
+        output_dir: Directory to save the plot
+    """
+    # Set up the figure
+    plt.figure(figsize=(10, 6))
+    
+    # Plot line for each agent
+    for agent in agent_configs['id']:
+        plt.plot(
+            range(len(ratings_df)), 
+            ratings_df[agent],
+            label=f"Agent {agent}",
+            linewidth=2
+        )
+    
+    # Set title and labels
+    plt.title("Elo Rating Progression")
+    plt.xlabel("Games Played")
+    plt.ylabel("Elo Rating")
+    
+    # Add baseline rating line
+    plt.axhline(y=1500, color='r', linestyle='--', alpha=0.5, label='Initial Rating')
+    
+    plt.grid(True)
+    plt.legend()
+    
+    # Save plot
+    plt.savefig(Path(output_dir) / 'elo_progression.png')
+    return plt
+
+
+def plot_final_elo_ratings(final_ratings: pd.DataFrame, agent_configs: pd.DataFrame, output_dir: Path):
+    """Create a line plot of final Elo ratings.
+    
+    Args:
+        final_ratings: DataFrame containing final Elo ratings
+        agent_configs: DataFrame containing agent configurations
+        output_dir: Directory to save the plot
+    """
+    # Create line plot
+    plt.figure(figsize=(10, 6))
+    
+    agents = sorted(final_ratings.index)
+    ratings = [final_ratings[agent] for agent in agents]
+    
+    # Plot line with markers
+    plt.plot(agents, ratings, marker='o', linestyle='-', linewidth=2, markersize=8)
+    
+    # Add baseline rating line
+    plt.axhline(y=1500, color='r', linestyle='--', alpha=0.5, label='Initial Rating')
+    
+    plt.title("Final Elo Ratings")
+    plt.xlabel("Agent ID")
+    plt.ylabel("Elo Rating")
+    plt.grid(True)
+    plt.legend()
+    
+    # Set x-axis ticks to agent IDs
+    plt.xticks(agents)
+    
+    plt.savefig(Path(output_dir) / 'final_elo_ratings.png')
+    return plt
+
+
+def calculate_pairwise_win_rates(game_records: pd.DataFrame, agent_configs: pd.DataFrame) -> pd.DataFrame:
+    """Calculate win rates between each pair of agents.
+    
+    Args:
+        game_records: DataFrame containing game results
+        agent_configs: DataFrame containing agent configurations
+        
+    Returns:
+        DataFrame with win rates from row agent's perspective against column agent
+    """
+    agents = sorted(agent_configs['id'].unique())
+    win_rates = pd.DataFrame(np.nan, index=agents, columns=agents)  # Initialize with NaN
+
+    # Calculate win rate for each pair
+    for agent1 in agents:
+        for agent2 in agents:
+            if agent1 != agent2:  # Skip diagonal entries
+                # Get games between these agents
+                mask = ((game_records['agent1'] == agent1) & (game_records['agent2'] == agent2)) | \
+                       ((game_records['agent1'] == agent2) & (game_records['agent2'] == agent1))
+                games = game_records[mask]
+                
+                if len(games) > 0:
+                    # Calculate win rate from agent1's perspective
+                    wins = sum(
+                      ((games['agent1'] == agent1) &
+                      (games['winner'] == 'Player1')) |
+                      ((games['agent2'] == agent1) &
+                       (games['winner'] == 'Player2'))
+                    )
+                    win_rates.loc[agent1, agent2] = wins / len(games)
+                    # print number of wins and total games 
+                    print(f"Agent {agent1} vs Agent {agent2}: {wins} wins out of {len(games)} games")
+    
+    return win_rates
+
+
+def plot_win_rate_heatmap(win_rates: pd.DataFrame, agent_configs: pd.DataFrame, output_dir: Path):
+    """Create a heatmap showing win rates between all agent pairs.
+    
+    Args:
+        win_rates: DataFrame containing pairwise win rates
+        agent_configs: DataFrame containing agent configurations
+        output_dir: Directory to save the plot
+    """
+    plt.figure(figsize=(10, 8))
+    
+    # Create mask for diagonal entries
+    mask = np.zeros_like(win_rates)
+    np.fill_diagonal(mask, True)
+    
+    # Create heatmap
+    sns.heatmap(
+        win_rates,
+        annot=True,  # Show values in cells
+        fmt='.2f',   # Format as 2 decimal places
+        cmap='RdYlBu',  # Red (low) to Blue (high)
+        center=0.5,  # Center colormap at 0.5
+        vmin=0,      # Minimum value
+        vmax=1,      # Maximum value
+        square=True, # Make cells square
+        mask=mask,   # Mask diagonal entries
+        cbar_kws={'label': 'Win Rate (Row Agent)'},
+        annot_kws={'va': 'center'}  # Center annotations vertically
+    )
+    
+    # Add "N/A" text in diagonal entries
+    for i in range(len(win_rates)):
+        plt.text(i + 0.5, i + 0.5, 'N/A', 
+                horizontalalignment='center',
+                verticalalignment='center')
+    
+    plt.title("Pairwise Win Rates\n(Row Agent vs Column Agent)")
+    plt.xlabel("Opponent Agent ID")
+    plt.ylabel("Agent ID")
+    
+    plt.tight_layout()
+    plt.savefig(Path(output_dir) / 'win_rate_heatmap.png')
+    return plt
+
+def show_missing_data(game_records: pd.DataFrame):
+    return game_records[game_records['winner'].isna()]
