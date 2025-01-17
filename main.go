@@ -2,8 +2,8 @@ package main
 
 import (
 	"os"
-
 	"risk/experiments"
+
 	"time"
 
 	"github.com/rs/zerolog"
@@ -15,7 +15,7 @@ func init() {
 }
 
 func main() {
-	experiments.RunParallelizationToThroughput()
-	experiments.RunParallelizationToStrength()
-	// experiments.RunCutoffExperiment()
+	// experiments.RunParallelizationToThroughput()
+	// experiments.RunParallelizationToStrength()
+	experiments.RunCutoffExperiment()
 }

@@ -13,63 +13,63 @@ import (
 )
 
 const (
-	NumGames   = 10 // Per match up
-	Duration   = 10 * time.Millisecond
-	Goroutines = 32  // TODO: based on throughput experiment
-	Episodes   = 100 // TODO: based on volume experiment
+	NumGames   = 30 // Per match up
+	TimeBudget = 10 * time.Millisecond
 )
 
-var parallelizationConfigs = []metrics.AgentConfig{
-	{ID: 1, Goroutines: 1, Duration: Duration},
-	{ID: 2, Goroutines: 4, Duration: Duration},
-	{ID: 3, Goroutines: 8, Duration: Duration},
-	{ID: 4, Goroutines: 16, Duration: Duration},
-	{ID: 5, Goroutines: 32, Duration: Duration},
-	{ID: 6, Goroutines: 64, Duration: Duration},
-	{ID: 7, Goroutines: 128, Duration: Duration},
+var parallelConfigs = []metrics.AgentConfig{
+	{ID: 1, Goroutines: 1, Duration: TimeBudget},
+	{ID: 2, Goroutines: 4, Duration: TimeBudget},
+	{ID: 3, Goroutines: 8, Duration: TimeBudget},
+	{ID: 4, Goroutines: 16, Duration: TimeBudget},
+	{ID: 5, Goroutines: 32, Duration: TimeBudget},
+	{ID: 6, Goroutines: 64, Duration: TimeBudget},
+	{ID: 7, Goroutines: 128, Duration: TimeBudget},
 }
 
+// TODO: remove
 func RunParallelizationToThroughput() {
 	// Each matchup uses the same config for both players
 	// for the same playing strength and similar game length
 	matchUps := [][]metrics.AgentConfig{}
-	for _, config := range parallelizationConfigs {
+	for _, config := range parallelConfigs {
 		matchUps = append(matchUps, []metrics.AgentConfig{config, config})
 	}
 
-	runExperiment("parallelization_to_throughput", parallelizationConfigs, matchUps)
+	runExperiment("parallelization_to_throughput", parallelConfigs, matchUps)
 }
 
+// TODO: rename RunParallelizationExperiment()
 func RunParallelizationToStrength() {
-	baseline := metrics.AgentConfig{ID: 0, Goroutines: 1, Duration: Duration}
-
 	// Each matchup pairs an agent against the baseline sequential agent
+	baseline := metrics.AgentConfig{ID: 0, Goroutines: 1, Duration: TimeBudget}
 	matchUps := [][]metrics.AgentConfig{}
-	for _, config := range parallelizationConfigs {
+	for _, config := range parallelConfigs {
+		// TODO: alternate starting agent
 		matchUps = append(matchUps, []metrics.AgentConfig{baseline, config})
 	}
 
-	runExperiment("parallelization_to_strength", append(parallelizationConfigs, baseline), matchUps)
+	runExperiment("parallelization_to_strength", append(parallelConfigs, baseline), matchUps)
 }
 
 func RunCutoffExperiment() {
-	// TODO: cutoff based on volume experiment game length quartiles
-	configs := []metrics.AgentConfig{
-		{ID: 1, Goroutines: Goroutines, Episodes: Episodes}, // Without cutoff (full playout)
-		{ID: 2, Goroutines: Goroutines, Episodes: Episodes, Cutoff: 10},
-		{ID: 3, Goroutines: Goroutines, Episodes: Episodes, Cutoff: 50},
+	// TODO: get 8-goroutine game length distribution/quartiles
+	baseline := metrics.AgentConfig{ID: 0, Goroutines: 8, Duration: TimeBudget} // Without cutoff (full playout)
+	cutoffConfigs := []metrics.AgentConfig{
+		{ID: 1, Goroutines: baseline.Goroutines, Duration: baseline.Duration}, // Baseline equivalent
+		{ID: 2, Goroutines: baseline.Goroutines, Duration: baseline.Duration, Cutoff: 10},
+		{ID: 3, Goroutines: baseline.Goroutines, Duration: baseline.Duration, Cutoff: 75},  // Lower quartile
+		{ID: 4, Goroutines: baseline.Goroutines, Duration: baseline.Duration, Cutoff: 150}, // Median
+		{ID: 5, Goroutines: baseline.Goroutines, Duration: baseline.Duration, Cutoff: 200}, // Upper quartile
 	}
 
-	// Each matchup pairs two different configs
+	// Each matchup pairs the baseline agent against a cutoff agent
 	matchUps := [][]metrics.AgentConfig{}
-	for i, config1 := range configs {
-		for _, config2 := range configs[i+1:] {
-			matchUps = append(matchUps, []metrics.AgentConfig{config1, config2})
-		}
+	for _, config := range cutoffConfigs {
+		matchUps = append(matchUps, []metrics.AgentConfig{baseline, config})
 	}
 
-	// cutoff depth -> playing strength: faster, more playouts -> win rate/Elo rating
-	runExperiment("cutoff", configs, matchUps)
+	runExperiment("cutoff", cutoffConfigs, matchUps)
 }
 
 func runExperiment(name string, configs []metrics.AgentConfig, matchUps [][]metrics.AgentConfig) {
@@ -87,7 +87,7 @@ func runExperiment(name string, configs []metrics.AgentConfig, matchUps [][]metr
 		log.Info().Msgf("starting matchup %d of %d between agent1=%+v and agent2=%+v...", mi+1, len(matchUps), config1, config2)
 
 		for i := 0; i < NumGames; i++ {
-			log.Info().Msgf("starting game %d of %d...", i+1, NumGames)
+			log.Info().Msgf("starting matchup %d of %d game %d of %d...", mi+1, len(matchUps), i+1, NumGames)
 
 			winner, gameMetric, moveMetrics := runGame(config1, config2)
 			count++
@@ -104,7 +104,7 @@ func runExperiment(name string, configs []metrics.AgentConfig, matchUps [][]metr
 				})
 			}
 
-			log.Info().Msgf("completed game %d with winner: %s", i+1, winner)
+			log.Info().Msgf("completed matchup %d of %d game %d with winner: %s", mi+1, len(matchUps), i+1, winner)
 		}
 		log.Info().Msgf("completed matchup %d of %d", mi+1, len(matchUps))
 	}
