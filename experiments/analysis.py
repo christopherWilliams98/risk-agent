@@ -4,7 +4,9 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 import glob
 import numpy as np
-from typing import List, Dict
+from typing import List, Dict, Generator
+import random
+import matplotlib.animation as animation
 
 
 def load_experiment_data(experiment_dir):
@@ -117,35 +119,64 @@ def calculate_win_rates(
         .agg(
             {
                 "id": "count",  # Total games
-                "winner": lambda x: sum(x == "Player2"),  # Wins by experiment agent 
+                "winner": lambda x: sum(x == "Player2"),  # Wins by experiment agent
             }
         )
         .reset_index()
     )
 
-    results.columns = ["agent2", "games", "wins"] # TODO: rename during agg()
+    results.columns = ["agent2", "games", "wins"]  # TODO: rename during agg()
     results["win_rate"] = results["wins"] / results["games"]
 
     # Merge with agent configs to get configuration parameters
-    results = results.merge(
-        agent_configs,
-        left_on="agent2",
-        right_on="id",
-        how="left"
-    )
-    
+    results = results.merge(agent_configs, left_on="agent2", right_on="id", how="left")
+
     return results
 
 
+def process_cutoff_labels(win_rates: pd.DataFrame) -> pd.DataFrame:
+    """Process cutoff depth labels by adding descriptive postfixes.
+
+    Args:
+        win_rates: DataFrame containing win rates with 'cutoff' column
+
+    Returns:
+        DataFrame with processed cutoff labels
+    """
+    # Order by cutoff depth for plotting
+    win_rates = win_rates.sort_values("cutoff")
+
+    # Get no cutoff (full playout) row
+    full_playout = win_rates.iloc[0:1].copy()
+    full_playout["cutoff"] = "Full Playout (No Cutoff)"
+
+    # Process remaining cutoff depth rows
+    cutoff_depths = win_rates.iloc[1:].copy()
+    label_postfixes = [
+        "",
+        "(Lower Quartile)",
+        "(Median)",
+        "(Upper Quartile)",
+        "(Upper Fence)",
+    ]
+    cutoff_depths["cutoff"] = [
+        f"{depth} {label_postfixes[i]}"
+        for i, depth in enumerate(cutoff_depths["cutoff"])
+    ]
+
+    # Combine and return results
+    return pd.concat([cutoff_depths, full_playout])
+
+
 def plot_win_rates(
-    win_rates: pd.DataFrame, 
-    param_col: str, 
+    win_rates: pd.DataFrame,
+    param_col: str,
     output_dir: Path,
-    title: str = None,  
-    xlabel: str = None,  
+    title: str = None,
+    xlabel: str = None,
 ) -> plt.Figure:
     """Plot win rates against the varying configuration parameter.
-    
+
     Args:
         win_rates: DataFrame containing win rates and configuration parameters
         param_col: Name of column containing the configuration parameter
@@ -157,12 +188,12 @@ def plot_win_rates(
 
     # Create evenly spaced x-axis positions
     x_positions = np.arange(len(win_rates))
-    
+
     plt.plot(
         x_positions,
         win_rates["win_rate"],
         marker="o",
-        linestyle="-", 
+        linestyle="-",
         linewidth=2,
     )
 
@@ -184,97 +215,45 @@ def plot_win_rates(
     return plt
 
 
-def calculate_elo_ratings(
-    game_records: pd.DataFrame, K: float = 16.0
-) -> Dict[int, float]:
-    """Calculate Elo ratings for all agents after playing all games.
+def plot_combined_win_rates(
+    win_rates_list, param_col, output_dir, title=None, xlabel=None
+):
+    """Plot win rates from multiple experiments on the same chart.
 
     Args:
-        game_records: DataFrame containing game results
-        K: Elo K-factor (usually 16.0, 24.0, 32.0 or 40.0)
-
-    Returns:
-        Dictionary mapping agent IDs to their final Elo ratings
+        win_rates_list: List of (win_rates DataFrame, label) tuples
+        param_col: Column name for x-axis values
+        output_dir: Directory to save plot
+        title: Optional plot title
+        xlabel: Optional x-axis label
     """
-    # TODO: initialize at 1200?
-    # Initialize ratings for all agents (including baseline) at 1500
-    ratings = {
-        agent_id: 1500.0
-        for agent_id in pd.concat(
-            [game_records["agent1"], game_records["agent2"]]
-        ).unique()
-    }
-
-    # Shuffle games randomly to minimize ordering effects on final ratings
-    shuffled_games = game_records.sample(
-        frac=1.0, 
-        # random_state=12 # TODO fix random_state for reproducibility
-    )
-
-    # Update ratings by game outcomes in random order
-    for _, game in shuffled_games.iterrows():
-        agent1_id = game["agent1"]
-        agent2_id = game["agent2"]
-
-        # Get expected scores
-        rating_diff = (ratings[agent2_id] - ratings[agent1_id]) / 400.0
-        expected_1 = 1.0 / (1.0 + 10.0**rating_diff)
-        expected_2 = 1.0 - expected_1
-
-        # Get actual scores
-        actual_1 = 1.0 if game["winner"] == "Player1" else 0.0
-        actual_2 = 1.0 - actual_1
-
-        # Update ratings
-        ratings[agent1_id] += K * (actual_1 - expected_1)
-        ratings[agent2_id] += K * (actual_2 - expected_2)
-
-    return ratings
-
-
-def plot_elo_ratings(ratings: Dict[int, float], agent_configs: pd.DataFrame, output_dir: Path) -> plt.Figure:
-    """Plot Elo ratings against concurrency level."""
     plt.figure(figsize=(10, 6))
 
-    # Convert ratings to DataFrame for plotting
-    ratings_df = pd.DataFrame(
-        [{"id": agent_id, "rating": rating} for agent_id, rating in ratings.items()]
-    )
+    for win_rates, label in win_rates_list:
+        x_positions = np.arange(len(win_rates))
 
-    # Merge with agent configs to get goroutines info
-    ratings_df = ratings_df.merge(
-        agent_configs[["id", "goroutines"]], on="id", how="left"
-    )
+        plt.plot(
+            x_positions,
+            win_rates["win_rate"],
+            marker="o",
+            linestyle="-",
+            linewidth=2,
+            label=label,
+        )
 
-    # Get baseline agent's rating (agent with ID 0)
-    baseline_rating = ratings[0]
+    # Set title and labels
+    plt.title(title or "Win Rates Comparison")
+    plt.xlabel(xlabel or param_col.title())
+    plt.ylabel("Win Rate Against Baseline Agent")
 
-    # Sort by goroutines for line plot and exclude baseline agent
-    ratings_df = ratings_df[ratings_df["id"] != 0].sort_values("goroutines")
+    # Set x-axis ticks and labels using first dataset
+    x_labels = win_rates_list[0][0][param_col]
+    plt.xticks(np.arange(len(x_labels)), x_labels)
 
-    plt.plot(
-        range(len(ratings_df)),  # Use evenly spaced x labels
-        ratings_df["rating"],
-        marker="o",
-        linestyle="-",
-        linewidth=2,
-        # label="Parallel Agents"
-    )
+    # Add 50% line to show baseline performance
+    plt.axhline(y=0.5, color="r", linestyle="--", alpha=0.5, label="Baseline")
 
-    plt.title("Elo Rating vs Concurrency Level")
-    plt.xlabel("Number of Goroutines")
-    plt.ylabel("Elo Rating")
-
-    # Set x-axis ticks to show actual goroutine values as integers
-    plt.xticks(range(len(ratings_df)), ratings_df["goroutines"])
-
-    # Add initial rating line
-    plt.axhline(y=1500, color="gray", linestyle="--", alpha=0.5, label="Initial Rating")
-
-    # Add baseline rating line
-    # plt.axhline(y=baseline_rating, color="r", linestyle="--", alpha=0.5, label="Baseline Agent")
-
-    plt.legend()
     plt.grid(True)
-    plt.savefig(Path(output_dir) / "elo_ratings.png")
+    plt.legend()
+    plt.savefig(Path(output_dir) / "combined_win_rates.png")
     return plt
