@@ -14,29 +14,27 @@ type decision struct {
 	moves    []game.Move        // Unexplored
 	children map[game.Move]Node // Explored
 	hash     game.StateHash
-	phase    game.Phase
 	rewards  float64
 	visits   float64
 }
 
 func newDecision(parent Node, state game.State) *decision {
-	gs := state.(*game.GameState)
+	moves := state.LegalMoves()
 
-	moves := gs.LegalMoves()
+	//lazily compute state ID
 	var hash game.StateHash
 	if _, ok := parent.(*chance); ok {
-		hash = gs.Hash()
+		hash = state.Hash()
 	}
 
 	return &decision{
 		parent:   parent,
-		player:   gs.Player(),
+		player:   state.Player(),
 		moves:    moves,
 		children: make(map[game.Move]Node, len(moves)),
 		hash:     hash,
 		rewards:  0,
-		visits:   1,
-		phase:    gs.Phase,
+		visits:   0,
 	}
 }
 
@@ -56,16 +54,16 @@ func (d *decision) SelectOrExpand(state game.State) (Node, game.State, bool) {
 
 	var child Node
 	selected := false
-	if len(d.moves) > 0 {
+	if len(d.moves) > 0 { // Expand Node with an unexplored move
 		child, state = d.expands(state)
-	} else {
+	} else { // Select a child of fully expanded Node
 		child, state = d.selects(state)
 		selected = true
 	}
 
 	if child == d {
 		// Means we “skipped” the move => do NOT call child.applyLoss()
-		// Because that would cause a double lock.
+		// Because that would cause a deadlock.
 		return d, state, false
 	}
 
@@ -74,22 +72,8 @@ func (d *decision) SelectOrExpand(state game.State) (Node, game.State, bool) {
 }
 
 func (d *decision) expands(state game.State) (Node, game.State) {
-	gs := state.(*game.GameState)
 	move := d.moves[0]
 
-	// TODO: remove
-	// If the move is obviously invalid for this phase, skip it:
-	if !game.IsMoveValidForPhase(gs.Phase, move) {
-		// fmt.Printf("[MCTS expands] Skipping invalid move: Phase=%d, ActionType=%d\n", gs.Phase, move.(*game.GameMove).ActionType)
-
-		// remove the invalid move from the unexplored moves
-		d.moves = d.moves[1:]
-
-		// Also increment visits to avoid re-selecting the same node
-		d.visits++
-
-		return d, state
-	}
 	newState := state.Play(move)
 
 	var child Node
@@ -98,6 +82,7 @@ func (d *decision) expands(state game.State) (Node, game.State) {
 	} else {
 		child = newDecision(d, newState)
 	}
+
 	d.children[move] = child
 	d.moves = d.moves[1:]
 	return child, newState
@@ -109,7 +94,9 @@ func (d *decision) selects(state game.State) (Node, game.State) {
 	}
 
 	if d.visits == 0 {
-		panic("unexplored parent node (0 visits)")
+		// Instead of panicking, discard the subtree by returning a new decision
+		// and continue with the current state.
+		return newDecision(d.parent, state), state
 	}
 
 	policy := newUCT(CSquared, d.visits)
