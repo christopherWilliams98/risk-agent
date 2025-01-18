@@ -61,12 +61,6 @@ func (d *decision) SelectOrExpand(state game.State) (Node, game.State, bool) {
 		selected = true
 	}
 
-	if child == d {
-		// Means we “skipped” the move => do NOT call child.applyLoss()
-		// Because that would cause a deadlock.
-		return d, state, false
-	}
-
 	child.applyLoss()
 	return child, state, selected
 }
