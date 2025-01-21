@@ -123,8 +123,8 @@ func (ma *MCTSAdapter) FindMove(gs *game.GameState, recentUpdates []Update) (gam
 	segments := make([]searcher.Segment, len(recentUpdates))
 	for i, upd := range recentUpdates {
 		segments[i] = searcher.Segment{
-			Move:  upd.Move,
-			State: upd.State,
+			Move:      upd.Move,
+			StateHash: upd.Hash,
 		}
 	}
 	candidate, metrics := ma.InternalAgent.FindMove(gs, segments...)

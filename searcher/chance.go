@@ -29,7 +29,7 @@ func (c *chance) SelectOrExpand(state game.State) (Node, game.State, bool) {
 
 	// Select if explored outcome
 	selected := true
-	child := c.selects(state)
+	child := c.selects(state.Hash())
 	// Expand if unexplored outcome
 	if child == nil {
 		child = c.expands(state)
@@ -40,10 +40,9 @@ func (c *chance) SelectOrExpand(state game.State) (Node, game.State, bool) {
 	return child, state, selected
 }
 
-func (c *chance) selects(state game.State) *decision {
-	expected := state.Hash()
+func (c *chance) selects(hash game.StateHash) *decision {
 	for _, child := range c.children {
-		if child.hash == expected {
+		if child.hash == hash {
 			return child
 		}
 	}

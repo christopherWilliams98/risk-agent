@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"risk/experiments"
+	"runtime"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -14,6 +15,8 @@ func init() {
 }
 
 func main() {
+	log.Info().Msgf("number of CPUs: %d", runtime.NumCPU())
+
 	experiments.RunParallelismExperiment()
 	// experiments.RunCutoffExperiment()
 	// experiments.RunEvaluationExperiment()

@@ -7,13 +7,15 @@ import (
 	"time"
 
 	"math/rand"
+
+	"github.com/rs/zerolog/log"
 )
 
 type Option func(mcts *MCTS)
 
 type Segment struct {
-	Move  game.Move
-	State game.State
+	Move      game.Move
+	StateHash game.StateHash
 }
 
 type MCTS struct {
@@ -84,13 +86,13 @@ func (m *MCTS) Simulate(state game.State, lineage []Segment) (map[game.Move]floa
 	m.metrics.Start(m.goroutines, m.cutoff, m.evaluate)
 
 	// Reuse subtree if possible
-	m.root = m.findSubtree(lineage, state, m.metrics)
+	m.findRoot(lineage, state, m.metrics)
 
 	// Run simulations to collect statistics
 	if m.episodes > 0 {
-		iterate(m.goroutines, m.episodes, m.cutoff, m.root, state, m.evaluate, m.metrics)
+		m.iterate(state)
 	} else if m.duration > 0 {
-		countdown(m.goroutines, m.duration, m.cutoff, m.root, state, m.evaluate, m.metrics)
+		m.countdown(state)
 	} else {
 		panic("Must specify search episodes or duration")
 	}
@@ -101,23 +103,22 @@ func (m *MCTS) Simulate(state game.State, lineage []Segment) (map[game.Move]floa
 	return policy, metrics
 }
 
-// TODO: make method
-func iterate(goroutines int, episodes int, cutoff int, root Node, state game.State, evaluate game.Evaluate, metrics metrics.Collector) {
-	task := make(chan any, episodes)
-	for i := 0; i < episodes; i++ {
+func (m *MCTS) iterate(state game.State) {
+	task := make(chan any, m.episodes)
+	for i := 0; i < m.episodes; i++ {
 		task <- nil
 	}
 	close(task)
 
 	var wg sync.WaitGroup
-	wg.Add(goroutines)
-	for i := 0; i < goroutines; i++ {
+	wg.Add(m.goroutines)
+	for i := 0; i < m.goroutines; i++ {
 		go func() {
 			defer wg.Done()
 
 			for range task {
-				simulate(root, state, cutoff, evaluate, metrics)
-				metrics.AddEpisode()
+				m.simulate(state)
+				m.metrics.AddEpisode()
 			}
 		}()
 	}
@@ -125,19 +126,18 @@ func iterate(goroutines int, episodes int, cutoff int, root Node, state game.Sta
 	wg.Wait()
 }
 
-// TODO: make method
-func countdown(goroutines int, duration time.Duration, cutoff int, root Node, state game.State, evaluate game.Evaluate, metrics metrics.Collector) {
+func (m *MCTS) countdown(state game.State) {
 	var wg sync.WaitGroup
 	start := time.Now()
 
-	for i := 0; i < goroutines; i++ {
+	for i := 0; i < m.goroutines; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 
-			for time.Since(start) < duration {
-				simulate(root, state, cutoff, evaluate, metrics)
-				metrics.AddEpisode()
+			for time.Since(start) < m.duration {
+				m.simulate(state)
+				m.metrics.AddEpisode()
 			}
 		}()
 	}
@@ -145,48 +145,52 @@ func countdown(goroutines int, duration time.Duration, cutoff int, root Node, st
 	wg.Wait()
 }
 
-// TODO: make function rather than method
-func (m *MCTS) findSubtree(path []Segment, state game.State, metrics metrics.Collector) *decision {
-	return newDecision(nil, state)
+func (m *MCTS) findRoot(path []Segment, state game.State, metrics metrics.Collector) {
+	root := traverse(m.root, path)
+	if root == nil {
+		m.root = newDecision(nil, state)
+	} else {
+		root.parent = nil
+		m.root = root
+		metrics.ReusedTree()
+	}
+}
 
-	if m.root == nil {
-		return newDecision(nil, state)
+func traverse(root *decision, path []Segment) *decision {
+	if root == nil {
+		return nil
 	}
-	if len(path) == 0 {
-		return m.root
-	}
-	// Traverse the search tree by path
-	// TODO: consider extracting to decision.go
-	node := m.root
+
+	node := root
 	for _, segment := range path {
-		child := node.children[segment.Move]
-		if child == nil {
-			return newDecision(nil, state)
+		child, ok := node.children[segment.Move]
+		if !ok { // Node has not expanded this move
+			return nil
 		}
 
 		switch child := child.(type) {
 		case *decision:
+			if child.hash != segment.StateHash {
+				log.Warn().Msgf("node's state hash %d does not match segment's state hash %d", child.hash, segment.StateHash)
+				return nil
+			}
 			node = child
 		case *chance:
-			grandChild := child.selects(segment.State)
+			grandChild := child.selects(segment.StateHash)
 			if grandChild == nil {
-				return newDecision(nil, state)
+				return nil
 			}
 			node = grandChild
 		default:
 			panic("Unexpected node type")
 		}
 	}
-
-	// Return the node at the end of the path as the new root
-	node.parent = nil
-	metrics.ReusedTree()
 	return node
 }
 
-func simulate(root Node, state game.State, cutoff int, evaluate game.Evaluate, metrics metrics.Collector) {
-	newNode, newState := selectThenExpand(root, state)
-	player, score := rollout(newState, cutoff, evaluate, metrics)
+func (m *MCTS) simulate(state game.State) {
+	newNode, newState := selectThenExpand(m.root, state)
+	player, score := rollout(newState, m.cutoff, m.evaluate, m.metrics)
 	backup(newNode, player, score)
 }
 

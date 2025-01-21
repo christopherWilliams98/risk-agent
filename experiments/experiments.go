@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	NumGames   = 3 // Per match up
+	NumGames   = 30 // Per match up
 	TimeBudget = 10 * time.Millisecond
 )
 
@@ -27,7 +27,6 @@ func RunParallelismExperiment() {
 		{ID: 4, Goroutines: 16, Duration: baseline.Duration},
 		{ID: 5, Goroutines: 32, Duration: baseline.Duration},
 		{ID: 6, Goroutines: 64, Duration: baseline.Duration},
-		{ID: 7, Goroutines: 128, Duration: baseline.Duration},
 	}
 	var matchUps [][]metrics.AgentConfig
 	for _, config := range expConfigs {

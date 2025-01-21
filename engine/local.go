@@ -61,8 +61,8 @@ func (e *localEngine) Run() (string, metrics.GameMetric, []metrics.MoveMetric) {
 			turnUpdates = []searcher.Segment{}
 		}
 		turnUpdates = append(turnUpdates, searcher.Segment{
-			Move:  move,
-			State: nextState,
+			Move:      move,
+			StateHash: nextState.Hash(),
 		})
 
 		state = nextState

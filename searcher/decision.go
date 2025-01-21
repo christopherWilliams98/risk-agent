@@ -21,19 +21,11 @@ type decision struct {
 
 func newDecision(parent Node, state game.State) *decision {
 	moves := state.LegalMoves()
-	movesCopy := make([]game.Move, len(moves))
-	copy(movesCopy, moves)
-
-	// TODO: remove
-	// var hash game.StateHash
-	// if _, ok := parent.(*chance); ok {
-	// 	hash = state.Hash()
-	// }
 
 	return &decision{
 		parent:   parent,
 		player:   state.Player(),
-		moves:    movesCopy,
+		moves:    moves,
 		children: make(map[game.Move]Node, len(moves)),
 		hash:     state.Hash(),
 		rewards:  0,
