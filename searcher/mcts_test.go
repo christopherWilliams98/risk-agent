@@ -1,9 +1,11 @@
 package searcher
 
 import (
+	"fmt"
 	"risk/game"
 	"testing"
 
+	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/require"
 )
 
@@ -71,29 +73,36 @@ func TestSimulate(t *testing.T) {
 	move1 := mockMove{id: 1}
 	move2 := mockMove{id: 2}
 
-	t.Run("first episode expands root with one child", func(t *testing.T) {
+	t.Run("first episode expands root with either child", func(t *testing.T) {
 		initialState := mockStateDeterministic{player: "player1"}
 		mcts := NewMCTS(1, WithEpisodes(1))
 		got, _ := mcts.Simulate(initialState, nil)
 
-		// 1st episode expands root with M1 to C1
-		expectedRoot := &decision{
+		// 1st episode expands root with M1 to C1 or M2 to C2
+		expectedRoot1 := &decision{
 			player:  "player1",
-			rewards: Win, // Backpropagate a win for P1
+			rewards: Win, // Backup a win for P1
 			visits:  1,
-			children: map[game.Move]Node{
-				move1: &decision{ // Expand with M1 to C1
-					player:  "player1",
-					rewards: Win,
-					visits:  1,
-				},
+			children: map[game.Move]Node{ // Expand with M1 to C1
+				move1: &decision{player: "player1", rewards: Win, visits: 1},
 			},
 		}
-		require.Equal(t, map[game.Move]float64{move1: 1}, got, "Should explore M1 once")
-		requireTreeEqual(t, expectedRoot, mcts.root.(*decision))
+		expectedRoot2 := &decision{
+			player:  "player1",
+			rewards: Win, // Backup a win for P1
+			visits:  1,
+			children: map[game.Move]Node{ // Expand with M2 to C2
+				move2: &decision{player: "player2", rewards: Loss, visits: 1},
+			},
+		}
+		require.Contains(t, []map[game.Move]float64{
+			{move1: 1}, // If C1 selected
+			{move2: 1}, // If C2 selected
+		}, got, "Should explore M1 or M2 once")
+		require.True(t, containsTree([]*decision{expectedRoot1, expectedRoot2}, mcts.root), "Tree should be constructed correctly")
 	})
 
-	t.Run("second episode expands root with second child", func(t *testing.T) {
+	t.Run("second episode expands root with the other child", func(t *testing.T) {
 		initialState := mockStateDeterministic{player: "player1"}
 		mcts := NewMCTS(1, WithEpisodes(2))
 		got, _ := mcts.Simulate(initialState, nil)
@@ -101,23 +110,15 @@ func TestSimulate(t *testing.T) {
 		// 2nd episode expands root with M2 to C2
 		expectedRoot := &decision{
 			player:  "player1",
-			rewards: Win * 2, // Backpropagate 2 wins for P1
+			rewards: Win * 2, // Backup 2 wins for P1
 			visits:  2,
-			children: map[game.Move]Node{
-				move1: &decision{
-					player:  "player1",
-					rewards: Win,
-					visits:  1,
-				},
-				move2: &decision{ // Expand with M2 to C2
-					player:  "player2",
-					rewards: Loss,
-					visits:  1,
-				},
+			children: map[game.Move]Node{ // Expand with M2 to C2
+				move1: &decision{player: "player1", rewards: Win, visits: 1},
+				move2: &decision{player: "player2", rewards: Loss, visits: 1},
 			},
 		}
 		require.Equal(t, map[game.Move]float64{move1: 1, move2: 1}, got, "Should explore M1 and M2 each once")
-		requireTreeEqual(t, expectedRoot, mcts.root.(*decision))
+		require.True(t, containsTree([]*decision{expectedRoot}, mcts.root), "Tree should be constructed correctly")
 	})
 
 	t.Run("third episode selects either child", func(t *testing.T) {
@@ -126,53 +127,70 @@ func TestSimulate(t *testing.T) {
 		got, _ := mcts.Simulate(initialState, nil)
 
 		// After 2 episodes, both moves have been tried once
-		// 3rd episode selects either child at random since they have equal UCT scores:
+		// 3rd episode selects either child since they have equal UCT scores:
 		// C1: rewards=WIN, visits=1, parent_visits=2, score = 1 + sqrt(2ln(2))
 		// C2: rewards=LOSS, visits=1, parent_visits=2, score = 1 + sqrt(2ln(2))
-		expectedRoot1 := &decision{
+		// and expands it with a random move
+		expectedRoot11 := &decision{
 			player:  "player1",
-			rewards: Win * 3, // Backpropagate 3 wins for P1
+			rewards: Win * 3, // Backup 3 wins for P1
 			visits:  3,
 			children: map[game.Move]Node{
 				move1: &decision{ // Select C1
 					player:  "player1",
 					rewards: Win * 2,
 					visits:  2,
-					children: map[game.Move]Node{
-						move1: &decision{ // Expand C1 with M1 again
-							player:  "player1",
-							rewards: Win,
-							visits:  1,
-						},
+					children: map[game.Move]Node{ // Expand C1 with M1
+						move1: &decision{player: "player1", rewards: Win, visits: 1},
 					},
 				},
-				move2: &decision{
-					player:  "player2",
-					rewards: Loss,
-					visits:  1,
-				},
+				move2: &decision{player: "player2", rewards: Loss, visits: 1},
 			},
 		}
-		expectedRoot2 := &decision{
+		expectedRoot12 := &decision{
+			player:  "player1",
+			rewards: Win * 3, // Backup 3 wins for P1
+			visits:  3,
+			children: map[game.Move]Node{
+				move1: &decision{ // Select C1
+					player:  "player1",
+					rewards: Win * 2,
+					visits:  2,
+					children: map[game.Move]Node{ // Expand C1 with M2
+						move2: &decision{player: "player2", rewards: Loss, visits: 1},
+					},
+				},
+				move2: &decision{player: "player2", rewards: Loss, visits: 1},
+			},
+		}
+		expectedRoot21 := &decision{
 			player:  "player1",
 			rewards: Win * 3,
 			visits:  3,
 			children: map[game.Move]Node{
-				move1: &decision{
-					player:  "player1",
-					rewards: Win,
-					visits:  1,
-				},
+				move1: &decision{player: "player1", rewards: Win, visits: 1},
 				move2: &decision{ // Select C2
 					player:  "player2",
 					rewards: Loss * 2,
 					visits:  2,
-					children: map[game.Move]Node{
-						move1: &decision{ // Expand C2 with M1
-							player:  "player1",
-							rewards: Win,
-							visits:  1,
-						},
+					children: map[game.Move]Node{ // Expand C2 with M1
+						move1: &decision{player: "player1", rewards: Win, visits: 1},
+					},
+				},
+			},
+		}
+		expectedRoot22 := &decision{
+			player:  "player1",
+			rewards: Win * 3,
+			visits:  3,
+			children: map[game.Move]Node{
+				move1: &decision{player: "player1", rewards: Win, visits: 1},
+				move2: &decision{ // Select C2
+					player:  "player2",
+					rewards: Loss * 2,
+					visits:  2,
+					children: map[game.Move]Node{ // Expand C2 with M2
+						move2: &decision{player: "player2", rewards: Loss, visits: 1},
 					},
 				},
 			},
@@ -182,11 +200,7 @@ func TestSimulate(t *testing.T) {
 			{move1: 2, move2: 1}, // If C1 selected
 			{move1: 1, move2: 2}, // If C2 selected
 		}, got, "Should explore one move twice and the other once")
-		if got[move1] == 2 {
-			requireTreeEqual(t, expectedRoot1, mcts.root.(*decision))
-		} else {
-			requireTreeEqual(t, expectedRoot2, mcts.root.(*decision))
-		}
+		require.True(t, containsTree([]*decision{expectedRoot11, expectedRoot12, expectedRoot21, expectedRoot22}, mcts.root), "Tree should be constructed correctly")
 	})
 
 	t.Run("fourth episode balances exploration vs exploitation", func(t *testing.T) {
@@ -200,11 +214,9 @@ func TestSimulate(t *testing.T) {
 		// or
 		// C1: rewards=WIN, visits=1, parent_visits=3, score = 1/1 + sqrt(2ln(3))
 		// C2: rewards=LOSS*2, visits=2, parent_visits=3, score = 2/2 + sqrt(2ln(3)/2)
-		require.Equal(t, map[game.Move]float64{move1: 2, move2: 2}, got,
-			"Should explore M1 twice and M2 twice")
-		expectedRoot := &decision{
+		expectedRoot11 := &decision{
 			player:  "player1",
-			rewards: Win * 4, // Backpropagate 4 wins for P1
+			rewards: Win * 4, // Backup 4 wins for P1
 			visits:  4,
 			children: map[game.Move]Node{
 				move1: &decision{
@@ -212,11 +224,7 @@ func TestSimulate(t *testing.T) {
 					rewards: Win * 2,
 					visits:  2,
 					children: map[game.Move]Node{
-						move1: &decision{
-							player:  "player1",
-							rewards: Win,
-							visits:  1,
-						},
+						move1: &decision{player: "player1", rewards: Win, visits: 1},
 					},
 				},
 				move2: &decision{
@@ -224,16 +232,83 @@ func TestSimulate(t *testing.T) {
 					rewards: Loss * 2,
 					visits:  2,
 					children: map[game.Move]Node{
-						move1: &decision{
-							player:  "player1",
-							rewards: Win,
-							visits:  1,
-						},
+						move1: &decision{player: "player1", rewards: Win, visits: 1},
 					},
 				},
 			},
 		}
-		requireTreeEqual(t, expectedRoot, mcts.root.(*decision))
+		expectedRoot12 := &decision{
+			player:  "player1",
+			rewards: Win * 4, // Backup 4 wins for P1
+			visits:  4,
+			children: map[game.Move]Node{
+				move1: &decision{
+					player:  "player1",
+					rewards: Win * 2,
+					visits:  2,
+					children: map[game.Move]Node{
+						move1: &decision{player: "player1", rewards: Win, visits: 1},
+					},
+				},
+				move2: &decision{
+					player:  "player2",
+					rewards: Loss * 2,
+					visits:  2,
+					children: map[game.Move]Node{
+						move2: &decision{player: "player2", rewards: Loss, visits: 1},
+					},
+				},
+			},
+		}
+		expectedRoot21 := &decision{
+			player:  "player1",
+			rewards: Win * 4, // Backup 4 wins for P1
+			visits:  4,
+			children: map[game.Move]Node{
+				move1: &decision{
+					player:  "player1",
+					rewards: Win * 2,
+					visits:  2,
+					children: map[game.Move]Node{
+						move2: &decision{player: "player2", rewards: Loss, visits: 1},
+					},
+				},
+				move2: &decision{
+					player:  "player2",
+					rewards: Loss * 2,
+					visits:  2,
+					children: map[game.Move]Node{
+						move1: &decision{player: "player1", rewards: Win, visits: 1},
+					},
+				},
+			},
+		}
+		expectedRoot22 := &decision{
+			player:  "player1",
+			rewards: Win * 4, // Backup 4 wins for P1
+			visits:  4,
+			children: map[game.Move]Node{
+				move1: &decision{
+					player:  "player1",
+					rewards: Win * 2,
+					visits:  2,
+					children: map[game.Move]Node{
+						move2: &decision{player: "player2", rewards: Loss, visits: 1},
+					},
+				},
+				move2: &decision{
+					player:  "player2",
+					rewards: Loss * 2,
+					visits:  2,
+					children: map[game.Move]Node{
+						move2: &decision{player: "player2", rewards: Loss, visits: 1},
+					},
+				},
+			},
+		}
+		require.Equal(t, map[game.Move]float64{move1: 2, move2: 2}, got,
+			"Should explore M1 twice and M2 twice")
+		require.True(t, containsTree([]*decision{expectedRoot11, expectedRoot12, expectedRoot21, expectedRoot22}, mcts.root), "Tree should be constructed correctly")
 	})
 }
 
@@ -248,11 +323,10 @@ func TestSimulateParallel(t *testing.T) {
 	// After 4 episodes with 2 goroutines:
 	// - Root should have expanded both moves
 	// - Each child should be selected and expanded once
-	// - Visit counts should add up correctly
-	// - Rewards should reflect wins/losses correctly
-	expectedRoot := &decision{
+	// - Visit counts and rewards should match sequential simulation's results
+	expectedRoot11 := &decision{
 		player:  "player1",
-		rewards: Win * 4,
+		rewards: Win * 4, // Backup 4 wins for P1
 		visits:  4,
 		children: map[game.Move]Node{
 			move1: &decision{
@@ -260,11 +334,7 @@ func TestSimulateParallel(t *testing.T) {
 				rewards: Win * 2,
 				visits:  2,
 				children: map[game.Move]Node{
-					move1: &decision{
-						player:  "player1",
-						rewards: Win,
-						visits:  1,
-					},
+					move1: &decision{player: "player1", rewards: Win, visits: 1},
 				},
 			},
 			move2: &decision{
@@ -272,19 +342,83 @@ func TestSimulateParallel(t *testing.T) {
 				rewards: Loss * 2,
 				visits:  2,
 				children: map[game.Move]Node{
-					move1: &decision{
-						player:  "player1",
-						rewards: Win,
-						visits:  1,
-					},
+					move1: &decision{player: "player1", rewards: Win, visits: 1},
 				},
 			},
 		},
 	}
-
+	expectedRoot12 := &decision{
+		player:  "player1",
+		rewards: Win * 4, // Backup 4 wins for P1
+		visits:  4,
+		children: map[game.Move]Node{
+			move1: &decision{
+				player:  "player1",
+				rewards: Win * 2,
+				visits:  2,
+				children: map[game.Move]Node{
+					move1: &decision{player: "player1", rewards: Win, visits: 1},
+				},
+			},
+			move2: &decision{
+				player:  "player2",
+				rewards: Loss * 2,
+				visits:  2,
+				children: map[game.Move]Node{
+					move2: &decision{player: "player2", rewards: Loss, visits: 1},
+				},
+			},
+		},
+	}
+	expectedRoot21 := &decision{
+		player:  "player1",
+		rewards: Win * 4, // Backup 4 wins for P1
+		visits:  4,
+		children: map[game.Move]Node{
+			move1: &decision{
+				player:  "player1",
+				rewards: Win * 2,
+				visits:  2,
+				children: map[game.Move]Node{
+					move2: &decision{player: "player2", rewards: Loss, visits: 1},
+				},
+			},
+			move2: &decision{
+				player:  "player2",
+				rewards: Loss * 2,
+				visits:  2,
+				children: map[game.Move]Node{
+					move1: &decision{player: "player1", rewards: Win, visits: 1},
+				},
+			},
+		},
+	}
+	expectedRoot22 := &decision{
+		player:  "player1",
+		rewards: Win * 4, // Backup 4 wins for P1
+		visits:  4,
+		children: map[game.Move]Node{
+			move1: &decision{
+				player:  "player1",
+				rewards: Win * 2,
+				visits:  2,
+				children: map[game.Move]Node{
+					move2: &decision{player: "player2", rewards: Loss, visits: 1},
+				},
+			},
+			move2: &decision{
+				player:  "player2",
+				rewards: Loss * 2,
+				visits:  2,
+				children: map[game.Move]Node{
+					move2: &decision{player: "player2", rewards: Loss, visits: 1},
+				},
+			},
+		},
+	}
 	require.Equal(t, map[game.Move]float64{move1: 2, move2: 2}, got,
-		"Should explore each move twice")
-	requireTreeEqual(t, expectedRoot, mcts.root.(*decision))
+		"Should explore M1 twice and M2 twice")
+	require.True(t, containsTree([]*decision{expectedRoot11, expectedRoot12, expectedRoot21, expectedRoot22}, mcts.root), "Tree should be constructed correctly")
 }
 
 // mockStateTerminal mocks game state for testing MCTS behaviors with
@@ -358,7 +492,7 @@ func TestSimulateTerminal(t *testing.T) {
 
 		require.Equal(t, map[game.Move]float64{move: 1}, got,
 			"Should explore move once")
-		requireTreeEqual(t, expectedRoot, mcts.root.(*decision))
+		require.True(t, containsTree([]*decision{expectedRoot}, mcts.root), "Tree should be constructed correctly")
 	})
 
 	t.Run("second episode selects terminal state", func(t *testing.T) {
@@ -383,7 +517,7 @@ func TestSimulateTerminal(t *testing.T) {
 
 		require.Equal(t, map[game.Move]float64{move: 2}, got,
 			"Should explore same move twice")
-		requireTreeEqual(t, expectedRoot, mcts.root.(*decision))
+		require.True(t, containsTree([]*decision{expectedRoot}, mcts.root), "Tree should be constructed correctly")
 	})
 
 	t.Run("third episode selects terminal state again", func(t *testing.T) {
@@ -407,7 +541,7 @@ func TestSimulateTerminal(t *testing.T) {
 		}
 
 		require.Equal(t, map[game.Move]float64{move: 3}, got, "Should explore same move three times")
-		requireTreeEqual(t, expectedRoot, mcts.root.(*decision))
+		require.True(t, containsTree([]*decision{expectedRoot}, mcts.root), "Tree should be constructed correctly")
 	})
 }
 
@@ -437,7 +571,7 @@ func TestSimulateTerminalParallel(t *testing.T) {
 	}
 
 	require.Equal(t, map[game.Move]float64{move: 3}, got, "Should explore same move three times")
-	requireTreeEqual(t, expectedRoot, mcts.root.(*decision))
+	require.True(t, containsTree([]*decision{expectedRoot}, mcts.root), "Tree should be constructed correctly")
 }
 
 // alternator returns a function that alternates between two outcomes
@@ -537,7 +671,7 @@ func TestSimulateStochastic(t *testing.T) {
 	move2 := mockMove{id: 2}
 	move3 := mockMove{id: 3}
 
-	t.Run("first episode expands stochastic move with chance node", func(t *testing.T) {
+	t.Run("first episode expands either move", func(t *testing.T) {
 		initialState := mockStateStochastic{
 			player:      "player1",
 			state:       "S0",
@@ -546,27 +680,30 @@ func TestSimulateStochastic(t *testing.T) {
 		mcts := NewMCTS(1, WithEpisodes(1))
 		got, _ := mcts.Simulate(initialState, nil)
 
-		// First episode expands root with M1 to chance node and uses S1 for rollout
-		expectedRoot := &decision{
+		// One episode expands either move
+		expectedRoot1 := &decision{
 			player:  "player1",
 			rewards: Win,
 			visits:  1,
-			children: map[game.Move]Node{
-				move1: &chance{
-					player:   "player1",
-					rewards:  Win,
-					visits:   1,
-					children: []*decision{}, // No outcomes yet
-				},
+			children: map[game.Move]Node{ // Expand M1 to chance node
+				move1: &chance{player: "player1", rewards: Win, visits: 1, children: []*decision{}}, // No outcomes yet
+			},
+		}
+		expectedRoot2 := &decision{
+			player:  "player1",
+			rewards: Loss,
+			visits:  1,
+			children: map[game.Move]Node{ // Expand M2 to S2
+				move2: &decision{player: "player2", rewards: Win, visits: 1}, // No outcomes yet
 			},
 		}
 
-		require.Equal(t, map[game.Move]float64{move1: 1}, got,
+		require.Contains(t, []map[game.Move]float64{{move1: 1}, {move2: 1}}, got,
 			"Should explore stochastic move once")
-		requireTreeEqual(t, expectedRoot, mcts.root.(*decision))
+		require.True(t, containsTree([]*decision{expectedRoot1, expectedRoot2}, mcts.root), "Tree should be constructed correctly")
 	})
 
-	t.Run("second episode expands deterministic move", func(t *testing.T) {
+	t.Run("second episode expands the other move", func(t *testing.T) {
 		initialState := mockStateStochastic{
 			player:      "player1",
 			state:       "S0",
@@ -575,7 +712,7 @@ func TestSimulateStochastic(t *testing.T) {
 		mcts := NewMCTS(1, WithEpisodes(2))
 		got, _ := mcts.Simulate(initialState, nil)
 
-		// Second episode expands root with M2 to S2
+		// Two episodes should expand both moves
 		expectedRoot := &decision{
 			player:  "player1",
 			rewards: Win + Loss,
@@ -599,7 +736,7 @@ func TestSimulateStochastic(t *testing.T) {
 			move1: 1,
 			move2: 1,
 		}, got, "Should explore both moves once")
-		requireTreeEqual(t, expectedRoot, mcts.root.(*decision))
+		require.True(t, containsTree([]*decision{expectedRoot}, mcts.root), "Tree should be constructed correctly")
 	})
 
 	t.Run("third episode expands one stochastic outcome", func(t *testing.T) {
@@ -642,7 +779,7 @@ func TestSimulateStochastic(t *testing.T) {
 			move1: 2,
 			move2: 1,
 		}, got, "Should explore stochastic move twice")
-		requireTreeEqual(t, expectedRoot, mcts.root.(*decision))
+		require.True(t, containsTree([]*decision{expectedRoot}, mcts.root), "Tree should be constructed correctly")
 	})
 
 	t.Run("fourth episode expands the other stochastic outcome", func(t *testing.T) {
@@ -689,7 +826,7 @@ func TestSimulateStochastic(t *testing.T) {
 			move1: 3,
 			move2: 1,
 		}, got, "Should explore stochastic move three times")
-		requireTreeEqual(t, expectedRoot, mcts.root.(*decision))
+		require.True(t, containsTree([]*decision{expectedRoot}, mcts.root), "Tree should be constructed correctly")
 	})
 
 	t.Run("fifth episode selects existing outcome", func(t *testing.T) {
@@ -743,7 +880,7 @@ func TestSimulateStochastic(t *testing.T) {
 			move1: 4,
 			move2: 1,
 		}, got, "Should explore stochastic move four times")
-		requireTreeEqual(t, expectedRoot, mcts.root.(*decision))
+		require.True(t, containsTree([]*decision{expectedRoot}, mcts.root), "Tree should be constructed correctly")
 	})
 }
 
@@ -807,45 +944,61 @@ func TestSimulateStochasticParallel(t *testing.T) {
 		move1: 4,
 		move2: 1,
 	}, got, "Should explore stochastic move four times")
-	requireTreeEqual(t, expectedRoot, mcts.root.(*decision))
+	require.True(t, containsTree([]*decision{expectedRoot}, mcts.root), "Tree should be constructed correctly")
 }
 
-func requireTreeEqual(t *testing.T, expected, actual *decision) {
-	t.Helper()
+func containsTree(expected []*decision, actual *decision) bool {
+	for _, candidate := range expected {
+		if decisionEqual(candidate, actual) {
+			return true
+		}
+	}
+	log.Debug().Str("actual", fmt.Sprintf("%+v", actual)).Msg("no match was found")
+	return false
+}
 
-	require.Equal(t, expected.player, actual.player, "Player should match")
-	require.Equal(t, expected.rewards, actual.rewards, "Rewards should match")
-	require.Equal(t, expected.visits, actual.visits, "Visits should match")
-	require.Equal(t, len(expected.children), len(actual.children),
-		"Should have same number of children")
+func decisionEqual(expected, actual *decision) bool {
+	if expected.player != actual.player ||
+		expected.rewards != actual.rewards ||
+		expected.visits != actual.visits ||
+		len(expected.children) != len(actual.children) {
+		return false
+	}
 
 	for move, expectedChild := range expected.children {
 		actualChild, exists := actual.children[move]
-		require.True(t, exists, "Move %v should exist", move)
+		if !exists {
+			return false
+		}
+
 		switch expected := expectedChild.(type) {
 		case *decision:
 			actual, ok := actualChild.(*decision)
-			require.True(t, ok, "Child should be decision node")
-			requireTreeEqual(t, expected, actual)
+			if !ok || !decisionEqual(expected, actual) {
+				return false
+			}
 		case *chance:
 			actual, ok := actualChild.(*chance)
-			require.True(t, ok, "Child should be chance node")
-			requireChanceEqual(t, expected, actual)
+			if !ok || !chanceEqual(expected, actual) {
+				return false
+			}
 		}
 	}
+	return true
 }
 
-func requireChanceEqual(t *testing.T, expected, actual *chance) {
-	t.Helper()
-
-	require.Equal(t, expected.player, actual.player, "Player should match")
-	require.Equal(t, expected.rewards, actual.rewards, "Rewards should match")
-	require.Equal(t, expected.visits, actual.visits, "Visits should match")
-	require.Equal(t, len(expected.children), len(actual.children),
-		"Should have same number of outcomes")
-
-	// Compare outcome nodes recursively
-	for i, expectedOutcome := range expected.children {
-		requireTreeEqual(t, expectedOutcome, actual.children[i])
+func chanceEqual(expected, actual *chance) bool {
+	if expected.player != actual.player ||
+		expected.rewards != actual.rewards ||
+		expected.visits != actual.visits ||
+		len(expected.children) != len(actual.children) {
+		return false
 	}
+
+	for i, expectedOutcome := range expected.children {
+		if !decisionEqual(expectedOutcome, actual.children[i]) {
+			return false
+		}
+	}
+	return true
 }

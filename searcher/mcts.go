@@ -22,7 +22,7 @@ type MCTS struct {
 	episodes   int
 	cutoff     int
 	evaluate   game.Evaluate
-	root       Node
+	root       *decision
 	metrics    metrics.Collector
 }
 
@@ -146,7 +146,7 @@ func countdown(goroutines int, duration time.Duration, cutoff int, root Node, st
 }
 
 // TODO: make function rather than method
-func (m *MCTS) findSubtree(path []Segment, state game.State, metrics metrics.Collector) Node {
+func (m *MCTS) findSubtree(path []Segment, state game.State, metrics metrics.Collector) *decision {
 	return newDecision(nil, state)
 
 	if m.root == nil {
@@ -157,7 +157,7 @@ func (m *MCTS) findSubtree(path []Segment, state game.State, metrics metrics.Col
 	}
 	// Traverse the search tree by path
 	// TODO: consider extracting to decision.go
-	node := m.root.(*decision)
+	node := m.root
 	for _, segment := range path {
 		child := node.children[segment.Move]
 		if child == nil {
