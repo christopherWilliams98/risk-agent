@@ -4,6 +4,7 @@ import (
 	// "fmt"
 	"time"
 
+	"math/rand"
 	"risk/experiments/metrics"
 	"risk/game"
 	"risk/searcher"
@@ -24,7 +25,6 @@ type Update struct {
 	Hash  game.StateHash
 }
 
-// TODO: map agents to players
 func LocalEngine(players []string, agents []MCTSAdapter, m *game.Map, r game.Rules) *Engine {
 	if len(players) != len(agents) {
 		panic("number of players does not match number of agents")
@@ -35,7 +35,10 @@ func LocalEngine(players []string, agents []MCTSAdapter, m *game.Map, r game.Rul
 
 	state := game.NewGameState(m, r)
 
-	state.CurrentPlayer = 1
+	// TODO: move this logic to State
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	firstPlayer := rng.Intn(len(players)) + 1
+	state.CurrentPlayer = firstPlayer
 
 	eng := &Engine{
 		State:  state,
