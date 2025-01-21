@@ -103,7 +103,7 @@ func (w *Writer) WriteGameRecords(records []GameRecord) error {
 	defer writer.Flush()
 
 	// Write header
-	header := []string{"id", "agent1", "agent2", "starting_player", "winner", "start_time", "end_time", "duration"}
+	header := []string{"id", "agent1", "agent2", "starting_player", "winner", "start_time", "end_time", "duration", "total_moves"}
 	err = writer.Write(header)
 	if err != nil {
 		return fmt.Errorf("failed to write game records header: %w", err)
@@ -120,6 +120,7 @@ func (w *Writer) WriteGameRecords(records []GameRecord) error {
 			record.StartTime.Format(time.RFC3339),
 			record.EndTime.Format(time.RFC3339),
 			record.Duration.String(),
+			strconv.Itoa(record.TotalMoves),
 		}
 		err = writer.Write(row)
 		if err != nil {
@@ -143,7 +144,7 @@ func (w *Writer) WriteMoveRecords(records []MoveRecord) error {
 	defer writer.Flush()
 
 	// Write header
-	header := []string{"game", "step", "player", "goroutines", "duration", "episodes", "full_playouts", "cutoff", "evaluation", "is_tree_reused"}
+	header := []string{"game", "step", "player", "goroutines", "duration", "episodes", "full_playouts", "cutoff", "evaluation", "is_tree_reset"}
 	err = writer.Write(header)
 	if err != nil {
 		return fmt.Errorf("failed to write move records header: %w", err)
@@ -161,7 +162,7 @@ func (w *Writer) WriteMoveRecords(records []MoveRecord) error {
 			strconv.Itoa(record.FullPlayouts),
 			strconv.Itoa(record.Cutoff),
 			getFnName(record.Evaluate),
-			strconv.FormatBool(record.IsTreeReused),
+			strconv.FormatBool(record.IsTreeReset),
 		}
 		err = writer.Write(row)
 		if err != nil {

@@ -13,8 +13,9 @@ import (
 )
 
 const (
-	NumGames   = 30 // Per match up
-	TimeBudget = 10 * time.Millisecond
+	TimeBudget        = 10 * time.Millisecond
+	NumBenchmarkGames = 200 // Per matchup
+	NumRatingGames    = 100 // Per matchup
 )
 
 func RunParallelismExperiment() {
@@ -34,7 +35,7 @@ func RunParallelismExperiment() {
 		matchUps = append(matchUps, []metrics.AgentConfig{baseline, config})
 	}
 
-	runExperiment("parallelism", append(expConfigs, baseline), matchUps)
+	runExperiment("parallelism", append(expConfigs, baseline), matchUps, NumBenchmarkGames)
 }
 
 // TODO: get SelectedConcurrency-goroutine's game length distribution/quartiles
@@ -62,7 +63,7 @@ func RunCutoffExperiment() {
 		matchUps = append(matchUps, []metrics.AgentConfig{baseline, config})
 	}
 
-	runExperiment("cutoff", expConfigs, matchUps)
+	runExperiment("cutoff", expConfigs, matchUps, NumBenchmarkGames)
 }
 
 func RunEvaluationExperiment() {
@@ -81,7 +82,7 @@ func RunEvaluationExperiment() {
 		matchUps = append(matchUps, []metrics.AgentConfig{baseline, config})
 	}
 
-	runExperiment("evaluation", expConfigs, matchUps)
+	runExperiment("evaluation", expConfigs, matchUps, NumBenchmarkGames)
 }
 
 const StrongestCutoff = LowCutoff // TODO: pick cutoff depth with the highest playing strength from cutoff experiment
@@ -102,10 +103,10 @@ func RunEloExperiment() {
 		}
 	}
 
-	runExperiment("elo", configs, matchUps)
+	runExperiment("elo", configs, matchUps, NumRatingGames)
 }
 
-func runExperiment(name string, configs []metrics.AgentConfig, matchUps [][]metrics.AgentConfig) {
+func runExperiment(name string, configs []metrics.AgentConfig, matchUps [][]metrics.AgentConfig, numGames int) {
 	// Run a number of games for each matchup
 	count := 0
 	var gameRecords []metrics.GameRecord
@@ -119,8 +120,8 @@ func runExperiment(name string, configs []metrics.AgentConfig, matchUps [][]metr
 
 		log.Info().Msgf("starting matchup %d of %d between agent1=%+v and agent2=%+v...", mi+1, len(matchUps), config1, config2)
 
-		for i := 0; i < NumGames; i++ {
-			log.Info().Msgf("starting matchup %d of %d game %d of %d...", mi+1, len(matchUps), i+1, NumGames)
+		for i := 0; i < numGames; i++ {
+			log.Info().Msgf("starting matchup %d of %d game %d of %d...", mi+1, len(matchUps), i+1, numGames)
 
 			winner, gameMetric, moveMetrics := runGame(config1, config2)
 			count++

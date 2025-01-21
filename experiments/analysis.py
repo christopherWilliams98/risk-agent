@@ -110,6 +110,21 @@ def plot_episodes_boxplot(move_records, agent_configs, output_dir):
     return plt
 
 
+def plot_episodes_violin(move_records, agent_configs, output_dir):
+    """Create a violin plot of episode distributions for each concurrency level."""
+    plt.figure(figsize=(12, 6))
+
+    # Create violin plot
+    sns.violinplot(data=move_records, x="goroutines", y="episodes", inner="box", cut=0)
+
+    plt.title("Distribution of Search Episodes by Concurrency Level")
+    plt.xlabel("Number of Goroutines")
+    plt.ylabel("Search Episodes")
+
+    plt.savefig(Path(output_dir) / "episodes_violin.png")
+    return plt
+
+
 def calculate_win_rates(
     game_records: pd.DataFrame, agent_configs: pd.DataFrame
 ) -> pd.DataFrame:

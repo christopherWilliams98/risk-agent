@@ -4,6 +4,8 @@ import (
 	"risk/experiments/metrics"
 	"risk/game"
 	"risk/searcher"
+
+	"github.com/rs/zerolog/log"
 )
 
 type evaluationAgent struct {
@@ -22,6 +24,9 @@ func (a evaluationAgent) FindMove(state game.State, updates ...searcher.Segment)
 }
 
 func findMax(policy map[game.Move]float64) game.Move {
+	if len(policy) == 0 {
+		log.Error().Msgf("policy is empty, returning nil move")
+	}
 	var maxMove game.Move
 	maxVisit := -1.0
 	for move, visit := range policy {

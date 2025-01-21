@@ -37,7 +37,8 @@ func (e *localEngine) Run() (string, metrics.GameMetric, []metrics.MoveMetric) {
 	var turnUpdates []searcher.Segment
 	prevPlayer := startingPlayer
 
-	for numMoves := 1; state.Winner() == "" && numMoves <= MaxMoves; numMoves++ {
+	numMoves := 1
+	for state.Winner() == "" && numMoves <= MaxMoves {
 		// Find the next move
 		currPlayer := state.CurrentPlayer
 		relevantUpdates := turnUpdates
@@ -45,6 +46,9 @@ func (e *localEngine) Run() (string, metrics.GameMetric, []metrics.MoveMetric) {
 			relevantUpdates = turnUpdates[len(turnUpdates)-1:]
 		}
 		move, searchMetric := e.agents[currPlayer-1].FindMove(state, relevantUpdates...)
+
+		move = replaceInvalidMove(state, move, numMoves)
+
 		// Collect move metrics
 		moveMetrics = append(moveMetrics, metrics.MoveMetric{
 			Step:         numMoves,
@@ -67,6 +71,7 @@ func (e *localEngine) Run() (string, metrics.GameMetric, []metrics.MoveMetric) {
 
 		state = nextState
 		prevPlayer = currPlayer
+		numMoves++
 	}
 
 	winner := state.Winner()
@@ -81,7 +86,20 @@ func (e *localEngine) Run() (string, metrics.GameMetric, []metrics.MoveMetric) {
 		StartTime:      start,
 		EndTime:        end,
 		Duration:       end.Sub(start),
+		TotalMoves:     numMoves - 1,
 	}
 
 	return winner, gameMetric, moveMetrics
+}
+
+func replaceInvalidMove(state *game.GameState, move game.Move, step int) game.Move {
+	if !game.IsMoveValidForPhase(state.Phase, move) {
+		log.Error().Msgf("invalid move %+v for phase %d at step %d", move, state.Phase, step)
+		fallbackMoves := state.LegalMoves()
+		if len(fallbackMoves) == 0 {
+			panic("No legal moves at all!")
+		}
+		return fallbackMoves[0]
+	}
+	return move
 }

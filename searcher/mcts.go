@@ -83,12 +83,11 @@ func NewMCTS(goroutines int, options ...Option) *MCTS {
 }
 
 func (m *MCTS) Simulate(state game.State, lineage []Segment) (map[game.Move]float64, metrics.SearchMetric) {
-	m.metrics.Start(m.goroutines, m.cutoff, m.evaluate)
-
 	// Reuse subtree if possible
 	m.findRoot(lineage, state, m.metrics)
 
 	// Run simulations to collect statistics
+	m.metrics.Start(m.goroutines, m.cutoff, m.evaluate)
 	if m.episodes > 0 {
 		m.iterate(state)
 	} else if m.duration > 0 {
@@ -96,11 +95,11 @@ func (m *MCTS) Simulate(state game.State, lineage []Segment) (map[game.Move]floa
 	} else {
 		panic("Must specify search episodes or duration")
 	}
+	metric := m.metrics.Complete()
 
 	// Output move policy and move finding metrics
-	metrics := m.metrics.Complete()
 	policy := m.root.Policy()
-	return policy, metrics
+	return policy, metric
 }
 
 func (m *MCTS) iterate(state game.State) {
@@ -111,8 +110,8 @@ func (m *MCTS) iterate(state game.State) {
 	close(task)
 
 	var wg sync.WaitGroup
-	wg.Add(m.goroutines)
 	for i := 0; i < m.goroutines; i++ {
+		wg.Add(1)
 		go func() {
 			defer wg.Done()
 
@@ -127,32 +126,35 @@ func (m *MCTS) iterate(state game.State) {
 }
 
 func (m *MCTS) countdown(state game.State) {
-	var wg sync.WaitGroup
-	start := time.Now()
+	done := make(chan any)
 
 	for i := 0; i < m.goroutines; i++ {
-		wg.Add(1)
 		go func() {
-			defer wg.Done()
-
-			for time.Since(start) < m.duration {
-				m.simulate(state)
-				m.metrics.AddEpisode()
+			for {
+				select {
+				case <-done:
+					return
+				default:
+					m.simulate(state)
+					m.metrics.AddEpisode()
+				}
 			}
 		}()
 	}
 
-	wg.Wait()
+	<-time.After(m.duration)
+	close(done)
 }
 
 func (m *MCTS) findRoot(path []Segment, state game.State, metrics metrics.Collector) {
 	root := traverse(m.root, path)
 	if root == nil {
 		m.root = newDecision(nil, state)
+		metrics.SetTreeReset(true)
 	} else {
 		root.parent = nil
 		m.root = root
-		metrics.ReusedTree()
+		metrics.SetTreeReset(false)
 	}
 }
 

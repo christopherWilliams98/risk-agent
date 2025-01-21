@@ -13,7 +13,7 @@ type SearchMetric struct {
 	Cutoff       int
 	Evaluate     game.Evaluate
 	FullPlayouts int
-	IsTreeReused bool
+	IsTreeReset  bool
 }
 
 type MoveMetric struct {
@@ -28,11 +28,12 @@ type GameMetric struct {
 	StartTime      time.Time
 	EndTime        time.Time
 	Duration       time.Duration
+	TotalMoves     int
 }
 
 type Collector interface {
 	Start(goroutines, cutoff int, evaluate game.Evaluate)
-	ReusedTree()
+	SetTreeReset(value bool)
 	AddFullPlayout()
 	AddEpisode()
 	Complete() SearchMetric
@@ -45,11 +46,15 @@ type collector struct {
 	startTime    time.Time
 	episodes     atomic.Int32
 	fullPlayouts atomic.Int32
-	isTreeReused bool
+	isTreeReset  atomic.Bool
 }
 
 func NewCollector() Collector {
 	return &collector{}
+}
+
+func (m *collector) SetTreeReset(value bool) {
+	m.isTreeReset.Store(value)
 }
 
 func (m *collector) Start(goroutines, cutoff int, evaluate game.Evaluate) {
@@ -57,10 +62,6 @@ func (m *collector) Start(goroutines, cutoff int, evaluate game.Evaluate) {
 	m.goroutines = goroutines
 	m.cutoff = cutoff
 	m.evaluate = evaluate
-}
-
-func (m *collector) ReusedTree() {
-	m.isTreeReused = true
 }
 
 func (m *collector) AddFullPlayout() {
@@ -79,7 +80,7 @@ func (m *collector) Complete() SearchMetric {
 		FullPlayouts: int(m.fullPlayouts.Load()),
 		Cutoff:       m.cutoff,
 		Evaluate:     m.evaluate,
-		IsTreeReused: m.isTreeReused,
+		IsTreeReset:  m.isTreeReset.Load(),
 	}
 }
 
@@ -90,7 +91,7 @@ func NewDummyCollector() Collector {
 }
 
 func (m *dummyCollector) Start(goroutines, cutoff int, evaluate game.Evaluate) {}
-func (m *dummyCollector) ReusedTree()                                          {}
+func (m *dummyCollector) SetTreeReset(value bool)                              {}
 func (m *dummyCollector) AddFullPlayout()                                      {}
 func (m *dummyCollector) AddEpisode()                                          {}
 func (m *dummyCollector) Complete() SearchMetric                               { return SearchMetric{} }
