@@ -3,6 +3,7 @@ package searcher
 import (
 	// "fmt"
 	"math"
+	"math/rand"
 	"risk/game"
 	"sync"
 )
@@ -75,7 +76,11 @@ func (d *decision) SelectOrExpand(state game.State) (Node, game.State, bool) {
 
 func (d *decision) expands(state game.State) (Node, game.State) {
 	gs := state.(*game.GameState)
-	move := d.moves[0]
+	// TODO: fix random seed for unit tests?
+	// TODO: ensure passing unit tests for correctness
+	// Expands a random move
+	index := rand.Intn(len(d.moves))
+	move := d.moves[index]
 
 	// TODO: remove
 	// If the move is obviously invalid for this phase, skip it:
@@ -99,7 +104,7 @@ func (d *decision) expands(state game.State) (Node, game.State) {
 		child = newDecision(d, newState)
 	}
 	d.children[move] = child
-	d.moves = d.moves[1:]
+	d.moves = append(d.moves[:index], d.moves[index+1:]...)
 	return child, newState
 }
 

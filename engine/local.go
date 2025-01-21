@@ -57,7 +57,7 @@ func (e *Engine) Run() (string, metrics.GameMetric, []metrics.MoveMetric) {
 
 	// Loop until there's a winner
 	turnCount := 1
-	const MaxTurns = 500
+	const MaxTurns = 10000
 	var moveMetrics []metrics.MoveMetric
 	start := time.Now()
 

@@ -261,3 +261,7 @@ The results of the playout phase are crucial for the subsequent backup phase, wh
  -->
 
  This allows the search to be scaled based on available computational resources, from single-threaded execution to many concurrent threads. The effectiveness of parallelization is influenced by several factors including the branching factor of the game, the depth of the tree, and the ratio of time spent in tree traversal versus simulation. The local mutex with virtual loss approach is particularly effective for Risk, where the large branching factor and relatively expensive simulations provide ample opportunity for threads to naturally distribute across different parts of the search space.
+
+ # Other Findings
+ ## An AlphaZero Approach
+ extend it to play stochastic games 
