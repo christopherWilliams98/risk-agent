@@ -77,7 +77,8 @@ func NewGameState(m *Map, rules Rules) *GameState {
 	// 	gs.CurrentPlayer)
 
 	gs.InitCards()
-	gs.CurrentPlayer = 1
+	// TODO: Randomize starting player
+	gs.CurrentPlayer = rand.Intn(numPlayers) + 1
 	gs.PlayerHands = make([][]RiskCard, 3)
 	gs.PlayerHands[1] = []RiskCard{}
 	gs.PlayerHands[2] = []RiskCard{}
