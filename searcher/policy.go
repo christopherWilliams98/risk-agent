@@ -15,19 +15,19 @@ type uct struct {
 	numerator float64
 }
 
-func newUCT(cSquared float64, N float64) *uct {
-	if N == 0 {
-		panic("N cannot be 0")
+func newUCT(cSquared float64, parentVisits float64) *uct {
+	if parentVisits == 0 {
+		panic("parent visits cannot be 0")
 	}
-	return &uct{numerator: cSquared * math.Log(N)}
+	return &uct{numerator: cSquared * math.Log(parentVisits)}
 }
 
-func (u uct) evaluate(q float64, n float64) float64 {
-	if n == 0 {
-		panic("n cannot be 0")
+func (u uct) evaluate(rewards float64, childVisits float64) float64 {
+	if childVisits == 0 {
+		panic("child visits cannot be 0")
 	}
 	// UCT = q/n + sqrt(c^2*ln(N)/n)
-	return q/n + math.Sqrt(u.numerator/n)
+	return rewards/childVisits + math.Sqrt(u.numerator/childVisits)
 }
 
 func computeReward(player string, score float64, current string) float64 {

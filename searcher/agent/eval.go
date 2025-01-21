@@ -15,10 +15,10 @@ func NewEvaluationAgent(mcts *searcher.MCTS) Agent {
 	return evaluationAgent{mcts: mcts}
 }
 
-func (a evaluationAgent) FindMove(state game.State, updates []searcher.Segment) (game.Move, metrics.SearchMetric) {
-	policy, metrics := a.mcts.Simulate(state, updates)
+func (a evaluationAgent) FindMove(state game.State, updates ...searcher.Segment) (game.Move, metrics.SearchMetric) {
+	policy, metric := a.mcts.Simulate(state, updates)
 	move := findMax(policy)
-	return move, metrics
+	return move, metric
 }
 
 func findMax(policy map[game.Move]float64) game.Move {

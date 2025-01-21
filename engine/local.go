@@ -1,142 +1,87 @@
 package engine
 
 import (
-	// "fmt"
-	"time"
-
-	"math/rand"
 	"risk/experiments/metrics"
 	"risk/game"
 	"risk/searcher"
 	"risk/searcher/agent"
+	"time"
 
 	"github.com/rs/zerolog/log"
 )
 
-// TODO: rewrite implementation in eval.go
-type Engine struct {
-	State  *game.GameState
-	Agents []MCTSAdapter
+// Evaluation engine runs a game locally and collects performance metrics
+type localEngine struct {
+	agents []agent.Agent
 }
 
-type Update struct {
-	Move  game.Move
-	State game.State
-	Hash  game.StateHash
+func NewLocalEngine(agents []agent.Agent) Engine {
+	if len(agents) != 2 {
+		panic("need two agents to play a game")
+	}
+	return &localEngine{agents: agents}
 }
 
-func LocalEngine(players []string, agents []MCTSAdapter, m *game.Map, r game.Rules) *Engine {
-	if len(players) != len(agents) {
-		panic("number of players does not match number of agents")
-	}
-	if len(players) < 2 {
-		panic("need at least two players")
-	}
+func (e *localEngine) Run() (string, metrics.GameMetric, []metrics.MoveMetric) {
+	// Initialize a new game
+	m := game.CreateMap()
+	rules := game.NewStandardRules()
+	state := game.NewGameState(m, rules)
 
-	state := game.NewGameState(m, r)
-
-	// TODO: move this logic to State
-	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-	firstPlayer := rng.Intn(len(players)) + 1
-	state.CurrentPlayer = firstPlayer
-
-	eng := &Engine{
-		State:  state,
-		Agents: agents,
-	}
-	return eng
-}
-
-// Run executes the entire game loop until a winner is found.
-func (e *Engine) Run() (string, metrics.GameMetric, []metrics.MoveMetric) {
-	updates := make([][]Update, len(e.Agents))
-	for i := range updates {
-		updates[i] = []Update{}
-	}
-
-	// TODO: find the random starting player and its agent accordingly
-	startingPlayer := e.State.CurrentPlayer
+	startingPlayer := state.CurrentPlayer
 	log.Info().Msgf("player %d is starting", startingPlayer)
 
-	// Loop until there's a winner
-	turnCount := 1
-	const MaxTurns = 10000
+	// Ask agents to play moves till there's a winner or max moves is exceeded
 	var moveMetrics []metrics.MoveMetric
 	start := time.Now()
+	var turnUpdates []searcher.Segment
+	prevPlayer := startingPlayer
 
-	for e.State.Winner() == "" && turnCount <= MaxTurns {
-		currentPlayerID := e.State.CurrentPlayer
-		agentIndex := currentPlayerID - 1
-
-		// Debug print
-		// fmt.Printf("===== TURN BEGIN: Player %d (agent index %d) =====\n", currentPlayerID, agentIndex)
-
-		move, searchMetrics := e.Agents[agentIndex].FindMove(e.State,
-			updates[agentIndex])
+	for numMoves := 1; state.Winner() == "" && numMoves <= MaxMoves; numMoves++ {
+		// Find the next move
+		currPlayer := state.CurrentPlayer
+		relevantUpdates := turnUpdates
+		if relevantUpdates != nil && currPlayer == prevPlayer {
+			relevantUpdates = turnUpdates[len(turnUpdates)-1:]
+		}
+		move, searchMetric := e.agents[currPlayer-1].FindMove(state, relevantUpdates...)
+		// Collect move metrics
 		moveMetrics = append(moveMetrics, metrics.MoveMetric{
-			Step:         turnCount,
-			Player:       e.State.CurrentPlayer,
-			SearchMetric: searchMetrics,
+			Step:         numMoves,
+			Player:       currPlayer,
+			SearchMetric: searchMetric,
+		})
+		// Play the next move
+		nextState, ok := state.Play(move).(*game.GameState)
+		if !ok {
+			panic("unexpected state type")
+		}
+		// Collect moves played during this player's turn
+		if currPlayer != prevPlayer { // Reset when turn changes
+			turnUpdates = []searcher.Segment{}
+		}
+		turnUpdates = append(turnUpdates, searcher.Segment{
+			Move:  move,
+			State: nextState,
 		})
 
-		// Debug print
-		// fmt.Printf("[Engine.Run] Player %d chose move: %+v\n", currentPlayerID, move)
-
-		newState := e.State.Play(move).(*game.GameState)
-
-		u := Update{
-			Move:  move,
-			State: newState.Copy(),
-			Hash:  newState.Hash(),
-		}
-		updates[agentIndex] = append(updates[agentIndex], u)
-
-		e.State = newState
-		// fmt.Printf("turn %d\n", turnCount)
-		turnCount++
+		state = nextState
+		prevPlayer = currPlayer
 	}
 
-	if e.State.Winner() != "" {
-		// fmt.Printf("Game ended due to a winner: %s\n", e.State.Winner())
-	} else {
-		// fmt.Printf("Stopped after %d turns (no winner yet)\n", MaxTurns)
+	winner := state.Winner()
+	if winner == "" {
+		log.Warn().Msgf("game ended after max number of moves (%d) without a winner", MaxMoves)
 	}
 
 	end := time.Now()
 	gameMetric := metrics.GameMetric{
 		StartingPlayer: startingPlayer,
-		Winner:         e.State.Winner(),
+		Winner:         winner,
 		StartTime:      start,
 		EndTime:        end,
 		Duration:       end.Sub(start),
 	}
 
-	return e.State.Winner(), gameMetric, moveMetrics
-}
-
-// TODO: remove code smell
-type MCTSAdapter struct {
-	InternalAgent agent.Agent
-}
-
-func (ma *MCTSAdapter) FindMove(gs *game.GameState, recentUpdates []Update) (game.Move, metrics.SearchMetric) {
-	segments := make([]searcher.Segment, len(recentUpdates))
-	for i, upd := range recentUpdates {
-		segments[i] = searcher.Segment{
-			Move:  upd.Move,
-			State: upd.State,
-		}
-	}
-	candidate, metrics := ma.InternalAgent.FindMove(gs, segments)
-
-	if !game.IsMoveValidForPhase(gs.Phase, candidate) {
-		// fmt.Printf("[MCTSAdapter] MCTS returned an invalid move for Phase=%d => forcing pass.\n", gs.Phase)
-		fallbackMoves := gs.LegalMoves()
-		if len(fallbackMoves) == 0 {
-			panic("No legal moves at all!")
-		}
-		return fallbackMoves[0], metrics
-	}
-
-	return candidate, metrics
+	return winner, gameMetric, moveMetrics
 }

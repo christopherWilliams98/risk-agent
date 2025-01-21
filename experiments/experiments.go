@@ -13,43 +13,29 @@ import (
 )
 
 const (
-	NumGames   = 30 // Per match up
+	NumGames   = 3 // Per match up
 	TimeBudget = 10 * time.Millisecond
 )
 
-var parallelConfigs = []metrics.AgentConfig{
-	{ID: 1, Goroutines: 1, Duration: TimeBudget},
-	{ID: 2, Goroutines: 4, Duration: TimeBudget},
-	{ID: 3, Goroutines: 8, Duration: TimeBudget},
-	{ID: 4, Goroutines: 16, Duration: TimeBudget},
-	{ID: 5, Goroutines: 32, Duration: TimeBudget},
-	{ID: 6, Goroutines: 64, Duration: TimeBudget},
-	{ID: 7, Goroutines: 128, Duration: TimeBudget},
-}
-
-// TODO: remove
-func RunParallelizationToThroughput() {
-	// Each matchup uses the same config for both players
-	// for the same playing strength and similar game length
-	matchUps := [][]metrics.AgentConfig{}
-	for _, config := range parallelConfigs {
-		matchUps = append(matchUps, []metrics.AgentConfig{config, config})
-	}
-
-	runExperiment("parallelization_to_throughput", parallelConfigs, matchUps)
-}
-
-// TODO: rename RunParallelizationExperiment()
-func RunParallelizationToStrength() {
+func RunParallelismExperiment() {
 	// Pairs the baseline agent against each experiment agent
 	baseline := metrics.AgentConfig{ID: 0, Goroutines: 1, Duration: TimeBudget}
-	matchUps := [][]metrics.AgentConfig{}
-	for _, config := range parallelConfigs {
+	expConfigs := []metrics.AgentConfig{
+		{ID: 1, Goroutines: baseline.Goroutines, Duration: baseline.Duration},
+		{ID: 2, Goroutines: 4, Duration: baseline.Duration},
+		{ID: 3, Goroutines: 8, Duration: baseline.Duration},
+		{ID: 4, Goroutines: 16, Duration: baseline.Duration},
+		{ID: 5, Goroutines: 32, Duration: baseline.Duration},
+		{ID: 6, Goroutines: 64, Duration: baseline.Duration},
+		{ID: 7, Goroutines: 128, Duration: baseline.Duration},
+	}
+	var matchUps [][]metrics.AgentConfig
+	for _, config := range expConfigs {
 		// TODO: alternate starting agent
 		matchUps = append(matchUps, []metrics.AgentConfig{baseline, config})
 	}
 
-	runExperiment("parallelization_to_strength", append(parallelConfigs, baseline), matchUps)
+	runExperiment("parallelism", append(expConfigs, baseline), matchUps)
 }
 
 // TODO: get SelectedConcurrency-goroutine's game length distribution/quartiles
@@ -110,7 +96,7 @@ func RunEloExperiment() {
 	}
 
 	// Run games between each pair of agents in round-robin
-	matchUps := [][]metrics.AgentConfig{}
+	var matchUps [][]metrics.AgentConfig
 	for i, config1 := range configs {
 		for _, config2 := range configs[i+1:] {
 			matchUps = append(matchUps, []metrics.AgentConfig{config1, config2})
@@ -123,8 +109,8 @@ func RunEloExperiment() {
 func runExperiment(name string, configs []metrics.AgentConfig, matchUps [][]metrics.AgentConfig) {
 	// Run a number of games for each matchup
 	count := 0
-	gameRecords := []metrics.GameRecord{}
-	moveRecords := []metrics.MoveRecord{}
+	var gameRecords []metrics.GameRecord
+	var moveRecords []metrics.MoveRecord
 
 	log.Info().Msgf("starting %s experiment...", name)
 
@@ -188,15 +174,11 @@ func runExperiment(name string, configs []metrics.AgentConfig, matchUps [][]metr
 
 // runGame executes a single game between two agents and returns the winner
 func runGame(config1, config2 metrics.AgentConfig) (string, metrics.GameMetric, []metrics.MoveMetric) {
-	players := []string{"Player1", "Player2"}
-	agents := []engine.MCTSAdapter{
-		{InternalAgent: agent.NewEvaluationAgent(createMCTS(config1))},
-		{InternalAgent: agent.NewEvaluationAgent(createMCTS(config2))},
+	agents := []agent.Agent{
+		agent.NewEvaluationAgent(createMCTS(config1)),
+		agent.NewEvaluationAgent(createMCTS(config2)),
 	}
-	m := game.CreateMap()
-	rules := game.NewStandardRules()
-	e := engine.LocalEngine(players, agents, m, rules)
-
+	e := engine.NewLocalEngine(agents)
 	winner, gameMetric, moveMetrics := e.Run()
 
 	return winner, gameMetric, moveMetrics

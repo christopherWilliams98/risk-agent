@@ -2,7 +2,10 @@ package game
 
 // evaluateBasic simply tallies each player's controlled resources (territories, troops, and regions) to produce a relative score between -1 and 1 from the current player's perspective
 func EvaluateResources(s State) float64 {
-	gs := s.(*GameState)
+	gs, ok := s.(*GameState)
+	if !ok {
+		panic("unexpected state type")
+	}
 	territoryScore, troopScore := gs.calculateResourceScores()
 	bonusScore := gs.calculateBonusScore()
 
@@ -11,7 +14,10 @@ func EvaluateResources(s State) float64 {
 
 // evaluateWithBorders considers each player's border strength and connectedness, in addition to controlled resources, to produce a score between -1 and 1 from the current player's perspective
 func EvaluateBorderStrength(s State) float64 {
-	gs := s.(*GameState)
+	gs, ok := s.(*GameState)
+	if !ok {
+		panic("unexpected state type")
+	}
 	territoryScore, troopScore := gs.calculateResourceScores()
 	bonusScore := gs.calculateBonusScore()
 	borderScore := gs.calculateBorderScore()

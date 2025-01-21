@@ -14,9 +14,8 @@ func init() {
 }
 
 func main() {
-	// experiments.RunParallelizationToThroughput()
-	// experiments.RunParallelizationToStrength()
+	experiments.RunParallelismExperiment()
 	// experiments.RunCutoffExperiment()
 	// experiments.RunEvaluationExperiment()
-	experiments.RunEloExperiment()
+	// experiments.RunEloExperiment()
 }

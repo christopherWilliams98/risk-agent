@@ -147,6 +147,8 @@ func countdown(goroutines int, duration time.Duration, cutoff int, root Node, st
 
 // TODO: make function rather than method
 func (m *MCTS) findSubtree(path []Segment, state game.State, metrics metrics.Collector) Node {
+	return newDecision(nil, state)
+
 	if m.root == nil {
 		return newDecision(nil, state)
 	}

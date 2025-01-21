@@ -3,7 +3,6 @@ package searcher
 import (
 	// "fmt"
 	"math"
-	"math/rand"
 	"risk/game"
 	"sync"
 )
@@ -23,17 +22,17 @@ func newDecision(parent Node, state game.State) *decision {
 	moves := state.LegalMoves()
 
 	// TODO: Lazily compute state ID
-	var hash game.StateHash
-	if _, ok := parent.(*chance); ok {
-		hash = state.Hash()
-	}
+	// var hash game.StateHash
+	// if _, ok := parent.(*chance); ok {
+	// 	hash = state.Hash()
+	// }
 
 	return &decision{
 		parent:   parent,
 		player:   state.Player(),
 		moves:    moves,
 		children: make(map[game.Move]Node, len(moves)),
-		hash:     hash,
+		hash:     state.Hash(),
 		rewards:  0,
 		visits:   0,
 	}
@@ -70,8 +69,10 @@ func (d *decision) expands(state game.State) (Node, game.State) {
 	// TODO: fix random seed for unit tests?
 	// TODO: ensure passing unit tests for correctness
 	// Expands a random move
-	index := rand.Intn(len(d.moves))
-	move := d.moves[index]
+	// index := rand.Intn(len(d.moves))
+	// move := d.moves[index]
+	move := d.moves[0]
+
 	newState := state.Play(move)
 
 	var child Node
@@ -82,7 +83,9 @@ func (d *decision) expands(state game.State) (Node, game.State) {
 	}
 
 	d.children[move] = child
-	d.moves = append(d.moves[:index], d.moves[index+1:]...)
+	// d.moves = append(d.moves[:index], d.moves[index+1:]...)
+	d.moves = d.moves[1:]
+
 	return child, newState
 }
 
@@ -91,16 +94,20 @@ func (d *decision) selects(state game.State) (Node, game.State) {
 		panic("no children")
 	}
 
-	if d.visits == 0 {
-		panic("unexplored parent node (0 visits)")
+	parentVisits := d.visits
+	// When the concurrency level is high or the number of legal moves is low, selection could happen when the parent is fully expanded but results are not yet backpropagated. In this case, use the number of children as the parent visit count and the child's virtual loss or backedup result as the child visit count.
+	if parentVisits == 0 {
+		parentVisits = float64(len(d.children))
 	}
 
-	policy := newUCT(CSquared, d.visits)
+	policy := newUCT(CSquared, parentVisits)
 	maxValue := math.Inf(-1)
 	var maxMove game.Move
+	// Iterate over children in random order
 	for move, child := range d.children {
 		player, rewards, visits := child.stats()
 		if visits == 0 {
+			// Child should have virtual loss or backpropagated result
 			panic("unexplored child node (0 visits)")
 		}
 		// Maximize my chance of winning or if turn changes, minimize the opponent's
