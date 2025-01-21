@@ -3,6 +3,7 @@ package searcher
 import (
 	// "fmt"
 	"math"
+	"math/rand"
 	"risk/game"
 	"sync"
 )
@@ -20,8 +21,10 @@ type decision struct {
 
 func newDecision(parent Node, state game.State) *decision {
 	moves := state.LegalMoves()
+	movesCopy := make([]game.Move, len(moves))
+	copy(movesCopy, moves)
 
-	// TODO: Lazily compute state ID
+	// TODO: remove
 	// var hash game.StateHash
 	// if _, ok := parent.(*chance); ok {
 	// 	hash = state.Hash()
@@ -30,7 +33,7 @@ func newDecision(parent Node, state game.State) *decision {
 	return &decision{
 		parent:   parent,
 		player:   state.Player(),
-		moves:    moves,
+		moves:    movesCopy,
 		children: make(map[game.Move]Node, len(moves)),
 		hash:     state.Hash(),
 		rewards:  0,
@@ -66,12 +69,9 @@ func (d *decision) SelectOrExpand(state game.State) (Node, game.State, bool) {
 }
 
 func (d *decision) expands(state game.State) (Node, game.State) {
-	// TODO: fix random seed for unit tests?
-	// TODO: ensure passing unit tests for correctness
-	// Expands a random move
-	// index := rand.Intn(len(d.moves))
-	// move := d.moves[index]
-	move := d.moves[0]
+	// Expand a random move
+	index := rand.Intn(len(d.moves)) // move := d.moves[0]
+	move := d.moves[index]
 
 	newState := state.Play(move)
 
@@ -81,9 +81,10 @@ func (d *decision) expands(state game.State) (Node, game.State) {
 	} else {
 		child = newDecision(d, newState)
 	}
-
 	d.children[move] = child
-	// d.moves = append(d.moves[:index], d.moves[index+1:]...)
+
+	// Remove the move from unexplored moves
+	d.moves[index] = d.moves[0]
 	d.moves = d.moves[1:]
 
 	return child, newState

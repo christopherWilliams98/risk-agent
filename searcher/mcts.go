@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/exp/rand"
+	"math/rand"
 )
 
 type Option func(mcts *MCTS)
@@ -65,7 +65,7 @@ func WithMetrics() Option {
 }
 
 func NewMCTS(goroutines int, options ...Option) *MCTS {
-	m := &MCTS{
+	m := &MCTS{ // Default values
 		goroutines: goroutines,
 		cutoff:     MaxCutoff,
 		evaluate:   game.EvaluateResources,

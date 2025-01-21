@@ -285,9 +285,8 @@ func TestDecisionBackup(t *testing.T) {
 func TestDecisionRaceConditions(t *testing.T) {
 	t.Run("concurrent expansion", func(t *testing.T) {
 		// Setup a node with 2 unexplored moves
-		unexploredMoves := []game.Move{mockMove{id: 0}, mockMove{id: 1}}
 		node := &decision{
-			moves:    unexploredMoves,
+			moves:    []game.Move{mockMove{id: 0}, mockMove{id: 1}},
 			children: map[game.Move]Node{},
 			rewards:  0,
 			visits:   0,
@@ -331,7 +330,7 @@ func TestDecisionRaceConditions(t *testing.T) {
 			require.Equal(t, 1.0, got[i].child.(*decision).visits,
 				"Child should apply a temporary loss")
 			require.False(t, got[i].selected, "Node should be expanded")
-			require.Contains(t, unexploredMoves, got[i].state.played[0],
+			require.Contains(t, []game.Move{mockMove{id: 0}, mockMove{id: 1}}, got[i].state.played[0],
 				"Node should expand with a legal move")
 		}
 
