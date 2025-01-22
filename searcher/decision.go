@@ -3,33 +3,38 @@ package searcher
 import (
 	// "fmt"
 	"math"
-	"math/rand"
 	"risk/game"
 	"sync"
+
+	"github.com/rs/zerolog/log"
 )
 
 type decision struct {
 	sync.RWMutex
-	parent   Node
-	player   string
-	moves    []game.Move        // Unexplored
-	children map[game.Move]Node // Explored
-	hash     game.StateHash
-	rewards  float64
-	visits   float64
+	parent     Node
+	player     string
+	unexplored []game.Move
+	explored   []game.Move
+	children   []Node
+	hash       game.StateHash
+	rewards    float64
+	visits     float64
 }
 
 func newDecision(parent Node, state game.State) *decision {
 	moves := state.LegalMoves()
+	movesCopy := make([]game.Move, len(moves))
+	copy(movesCopy, moves)
 
 	return &decision{
-		parent:   parent,
-		player:   state.Player(),
-		moves:    moves,
-		children: make(map[game.Move]Node, len(moves)),
-		hash:     state.Hash(),
-		rewards:  0,
-		visits:   0,
+		parent:     parent,
+		player:     state.Player(),
+		unexplored: movesCopy,
+		explored:   make([]game.Move, 0, len(movesCopy)),
+		children:   make([]Node, 0, len(movesCopy)),
+		hash:       state.Hash(),
+		rewards:    0,
+		visits:     0,
 	}
 }
 
@@ -42,14 +47,17 @@ func (d *decision) SelectOrExpand(state game.State) (Node, game.State, bool) {
 	d.Lock()
 	defer d.Unlock()
 
-	if len(d.moves) == 0 && len(d.children) == 0 {
-		// Terminal
+	if d.hash != state.Hash() {
+		log.Error().Msgf("d.hash %d != state.Hash() %d, node %+v", d.hash, state.Hash(), d)
+	}
+
+	if (len(d.unexplored) == 0) && (len(d.children) == 0) { // Terminal
 		return d, state, false
 	}
 
 	var child Node
 	selected := false
-	if len(d.moves) > 0 { // Expand node with an unexplored move
+	if len(d.unexplored) > 0 { // Expand node with an unexplored move
 		child, state = d.expands(state)
 	} else { // Select a child of fully expanded node
 		child, state = d.selects(state)
@@ -62,8 +70,9 @@ func (d *decision) SelectOrExpand(state game.State) (Node, game.State, bool) {
 
 func (d *decision) expands(state game.State) (Node, game.State) {
 	// Expand a random move
-	index := rand.Intn(len(d.moves)) // move := d.moves[0]
-	move := d.moves[index]
+	rng := newRNG()
+	index := rng.Intn(len(d.unexplored)) // move := d.moves[0]
+	move := d.unexplored[index]
 
 	newState := state.Play(move)
 
@@ -73,11 +82,11 @@ func (d *decision) expands(state game.State) (Node, game.State) {
 	} else {
 		child = newDecision(d, newState)
 	}
-	d.children[move] = child
-
+	d.children = append(d.children, child)
+	d.explored = append(d.explored, move)
 	// Remove the move from unexplored moves
-	d.moves[index] = d.moves[0]
-	d.moves = d.moves[1:]
+	d.unexplored[index] = d.unexplored[0]
+	d.unexplored = d.unexplored[1:]
 
 	return child, newState
 }
@@ -87,8 +96,8 @@ func (d *decision) selects(state game.State) (Node, game.State) {
 		panic("no children")
 	}
 
-	parentVisits := d.visits
 	// When the concurrency level is high or the number of legal moves is low, selection could happen when the parent is fully expanded but results are not yet backpropagated. In this case, use the number of children as the parent visit count and the child's virtual loss or backedup result as the child visit count.
+	parentVisits := d.visits
 	if parentVisits == 0 {
 		parentVisits = float64(len(d.children))
 	}
@@ -96,11 +105,14 @@ func (d *decision) selects(state game.State) (Node, game.State) {
 	policy := newUCT(CSquared, parentVisits)
 	maxValue := math.Inf(-1)
 	var maxMove game.Move
-	// Iterate over children in random order
-	for move, child := range d.children {
+	var maxChild Node
+	var childVisits []float64
+	var childRewards []float64
+	var childValues []float64
+	for i, child := range d.children {
 		player, rewards, visits := child.stats()
 		if visits == 0 {
-			// Child should have virtual loss or backpropagated result
+			// Child should have virtual loss or backed up result
 			panic("unexplored child node (0 visits)")
 		}
 		// Maximize my chance of winning or if turn changes, minimize the opponent's
@@ -110,10 +122,17 @@ func (d *decision) selects(state game.State) (Node, game.State) {
 		value := policy.evaluate(rewards, visits)
 		if value > maxValue {
 			maxValue = value
-			maxMove = move
+			maxMove = d.explored[i]
+			maxChild = child
 		}
+		childVisits = append(childVisits, visits)
+		childRewards = append(childRewards, rewards)
+		childValues = append(childValues, value)
 	}
-	return d.children[maxMove], state.Play(maxMove)
+	if maxMove == nil { // TODO: remove
+		log.Error().Msgf("maxMove %+v is nil, maxValue %f, parentVisits %f, numChildren %d, childVisits %+v, childRewards %+v, childValues %+v", maxMove, maxValue, parentVisits, len(d.children), childVisits, childRewards, childValues)
+	}
+	return maxChild, state.Play(maxMove)
 }
 
 func (d *decision) applyLoss() {
@@ -155,8 +174,12 @@ func (d *decision) Policy() map[game.Move]float64 {
 	defer d.RUnlock()
 
 	visits := make(map[game.Move]float64, len(d.children))
-	for move, child := range d.children {
-		_, _, visits[move] = child.stats()
+	for i, child := range d.children {
+		_, _, visits[d.explored[i]] = child.stats()
+	}
+
+	if len(visits) == 0 {
+		log.Error().Msgf("visits is empty, node %+v, children %+v", d, d.children)
 	}
 
 	return visits

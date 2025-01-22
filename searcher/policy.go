@@ -1,6 +1,10 @@
 package searcher
 
-import "math"
+import (
+	"math"
+	"math/rand"
+	"time"
+)
 
 // Hyperparameters for MCTS
 
@@ -35,4 +39,8 @@ func computeReward(player string, score float64, current string) float64 {
 		return score
 	}
 	return -score
+}
+
+func newRNG() *rand.Rand {
+	return rand.New(rand.NewSource(time.Now().UnixNano()))
 }

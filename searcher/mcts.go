@@ -6,8 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"math/rand"
-
 	"github.com/rs/zerolog/log"
 )
 
@@ -24,8 +22,8 @@ type MCTS struct {
 	episodes   int
 	cutoff     int
 	evaluate   game.Evaluate
-	root       *decision
-	metrics    metrics.Collector
+	// root       *decision
+	metrics metrics.Collector
 }
 
 func WithDuration(duration time.Duration) Option {
@@ -83,26 +81,33 @@ func NewMCTS(goroutines int, options ...Option) *MCTS {
 }
 
 func (m *MCTS) Simulate(state game.State, lineage []Segment) (map[game.Move]float64, metrics.SearchMetric) {
-	m.root = newDecision(nil, state)
+	root := newDecision(nil, state)
 	m.metrics.SetTreeReset(true)
+
+	// log.Warn().Msgf("root start %p: %+v", root, root)
 
 	// Run simulations to collect statistics
 	m.metrics.Start(m.goroutines, m.cutoff, m.evaluate)
 	if m.episodes > 0 {
-		m.iterate(state)
+		m.iterate(root, state)
 	} else if m.duration > 0 {
-		m.countdown(state)
+		m.countdown(root, state)
 	} else {
 		panic("Must specify search episodes or duration")
 	}
 	metric := m.metrics.Complete()
 
-	// Output move policy and move finding metrics
-	policy := m.root.Policy()
+	policy := root.Policy()
+
+	if len(policy) == 0 {
+		log.Error().Msgf("root end %p: %+v", root, root)
+		log.Error().Msgf("policy is empty, children %+v", root.children)
+	}
+
 	return policy, metric
 }
 
-func (m *MCTS) iterate(state game.State) {
+func (m *MCTS) iterate(root Node, state game.State) {
 	task := make(chan any, m.episodes)
 	for i := 0; i < m.episodes; i++ {
 		task <- nil
@@ -116,7 +121,7 @@ func (m *MCTS) iterate(state game.State) {
 			defer wg.Done()
 
 			for range task {
-				m.simulate(state)
+				m.simulate(root, state)
 				m.metrics.AddEpisode()
 			}
 		}()
@@ -125,17 +130,20 @@ func (m *MCTS) iterate(state game.State) {
 	wg.Wait()
 }
 
-func (m *MCTS) countdown(state game.State) {
+func (m *MCTS) countdown(root Node, state game.State) {
 	done := make(chan any)
+	var wg sync.WaitGroup
 
 	for i := 0; i < m.goroutines; i++ {
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			for {
 				select {
 				case <-done:
 					return
 				default:
-					m.simulate(state)
+					m.simulate(root, state)
 					m.metrics.AddEpisode()
 				}
 			}
@@ -144,54 +152,55 @@ func (m *MCTS) countdown(state game.State) {
 
 	<-time.After(m.duration)
 	close(done)
+	wg.Wait() // Wait for all goroutines to complete
 }
 
-func (m *MCTS) findRoot(path []Segment, state game.State) {
-	root := traverse(m.root, path)
-	if root == nil {
-		m.root = newDecision(nil, state)
-		m.metrics.SetTreeReset(true)
-	} else {
-		root.parent = nil
-		m.root = root
-		m.metrics.SetTreeReset(false)
-	}
-}
+// func (m *MCTS) findRoot(path []Segment, state game.State) {
+// 	root := traverse(m.root, path)
+// 	if root == nil {
+// 		m.root = newDecision(nil, state)
+// 		m.metrics.SetTreeReset(true)
+// 	} else {
+// 		root.parent = nil
+// 		m.root = root
+// 		m.metrics.SetTreeReset(false)
+// 	}
+// }
 
-func traverse(root *decision, path []Segment) *decision {
-	if root == nil {
-		return nil
-	}
+// func traverse(root *decision, path []Segment) *decision {
+// 	if root == nil {
+// 		return nil
+// 	}
+//
+// 	node := root
+// 	for _, segment := range path {
+// 		child, ok := node.children[segment.Move]
+// 		if !ok { // Node has not expanded this move
+// 			return nil
+// 		}
+//
+// 		switch child := child.(type) {
+// 		case *decision:
+// 			if child.hash != segment.StateHash {
+// 				log.Warn().Msgf("node's state hash %d does not match segment's state hash %d", child.hash, segment.StateHash)
+// 				return nil
+// 			}
+// 			node = child
+// 		case *chance:
+// 			grandChild := child.selects(segment.StateHash)
+// 			if grandChild == nil {
+// 				return nil
+// 			}
+// 			node = grandChild
+// 		default:
+// 			panic("Unexpected node type")
+// 		}
+// 	}
+// 	return node
+// }
 
-	node := root
-	for _, segment := range path {
-		child, ok := node.children[segment.Move]
-		if !ok { // Node has not expanded this move
-			return nil
-		}
-
-		switch child := child.(type) {
-		case *decision:
-			if child.hash != segment.StateHash {
-				log.Warn().Msgf("node's state hash %d does not match segment's state hash %d", child.hash, segment.StateHash)
-				return nil
-			}
-			node = child
-		case *chance:
-			grandChild := child.selects(segment.StateHash)
-			if grandChild == nil {
-				return nil
-			}
-			node = grandChild
-		default:
-			panic("Unexpected node type")
-		}
-	}
-	return node
-}
-
-func (m *MCTS) simulate(state game.State) {
-	newNode, newState := selectThenExpand(m.root, state)
+func (m *MCTS) simulate(root Node, state game.State) {
+	newNode, newState := selectThenExpand(root, state)
 	player, score := rollout(newState, m.cutoff, m.evaluate, m.metrics)
 	backup(newNode, player, score)
 }
@@ -209,9 +218,10 @@ func selectThenExpand(root Node, state game.State) (Node, game.State) {
 func rollout(state game.State, cutoff int, evaluate game.Evaluate, metrics metrics.Collector) (string, float64) {
 	depth := 0
 	moves := state.LegalMoves()
+	rng := newRNG()
 	// Rollout till game over or for cutoff number of moves
 	for len(moves) > 0 && (depth < cutoff) {
-		move := moves[rand.Intn(len(moves))] // Random rollout policy
+		move := moves[rng.Intn(len(moves))] // Random rollout policy
 		state = state.Play(move)
 		moves = state.LegalMoves()
 		depth++

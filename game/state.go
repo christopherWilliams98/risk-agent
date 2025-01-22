@@ -77,7 +77,7 @@ func NewGameState(m *Map, rules Rules) *GameState {
 	// 	gs.CurrentPlayer)
 
 	gs.InitCards()
-	// TODO: Randomize starting player
+	// Randomize starting player
 	gs.CurrentPlayer = rand.Intn(numPlayers) + 1
 	gs.PlayerHands = make([][]RiskCard, 3)
 	gs.PlayerHands[1] = []RiskCard{}
@@ -337,8 +337,8 @@ func (gs GameState) reinforcementMoves() []Move {
 	remainingTroops := gs.TroopsToPlace
 	enemyAdjacentTerritories := gs.getEnemyAdjacentTerritories()
 
-	//fmt.Printf("[reinforcementMoves] Player %d, TroopsToPlace=%d\n", gs.CurrentPlayer, gs.TroopsToPlace)
-	//fmt.Printf("[reinforcementMoves] EnemyAdjacentTerritories=%v\n", enemyAdjacentTerritories)
+	// fmt.Printf("[reinforcementMoves] Player %d, TroopsToPlace=%d\n", gs.CurrentPlayer, gs.TroopsToPlace)
+	// fmt.Printf("[reinforcementMoves] EnemyAdjacentTerritories=%v\n", enemyAdjacentTerritories)
 
 	// Possible troop amounts: one, half, all
 	troopAmounts := []int{1, remainingTroops / 2, remainingTroops}
@@ -354,7 +354,7 @@ func (gs GameState) reinforcementMoves() []Move {
 			}
 		}
 	}
-	//fmt.Printf("[reinforcementMoves] Generated %d moves\n", len(moves))
+	// fmt.Printf("[reinforcementMoves] Generated %d moves\n", len(moves))
 	return moves
 }
 
@@ -382,7 +382,7 @@ func (gs GameState) attackMoves() []Move {
 	moves = append(moves, &GameMove{
 		ActionType: PassAction,
 	})
-	//fmt.Printf("[attackMoves] Generated %d moves\n", len(moves))
+	// fmt.Printf("[attackMoves] Generated %d moves\n", len(moves))
 	return moves
 }
 

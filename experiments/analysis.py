@@ -124,6 +124,20 @@ def plot_episodes_violin(move_records, agent_configs, output_dir):
     plt.savefig(Path(output_dir) / "episodes_violin.png")
     return plt
 
+def plot_episodes_by_cutoff(move_records, agent_configs, output_dir):
+    """Create a violin plot of episode distributions for each cutoff depth."""
+    plt.figure(figsize=(12, 6))
+
+    # Create violin plot
+    sns.boxplot(data=move_records, x="cutoff", y="episodes")
+
+    plt.title("Distribution of Search Episodes by Cutoff Depth")
+    plt.xlabel("Cutoff Depth")
+    plt.ylabel("Search Episodes")
+
+    plt.savefig(Path(output_dir) / "episodes_violin_cutoff.png")
+    return plt
+
 
 def calculate_win_rates(
     game_records: pd.DataFrame, agent_configs: pd.DataFrame
@@ -169,11 +183,11 @@ def process_cutoff_labels(win_rates: pd.DataFrame) -> pd.DataFrame:
     # Process remaining cutoff depth rows
     cutoff_depths = win_rates.iloc[1:].copy()
     label_postfixes = [
-        "",
+        "(Lower Fence)",
         "(Lower Quartile)",
         "(Median)",
         "(Upper Quartile)",
-        "(Upper Fence)",
+        # "(Upper Fence)",
     ]
     cutoff_depths["cutoff"] = [
         f"{depth} {label_postfixes[i]}"

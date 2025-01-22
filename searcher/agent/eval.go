@@ -24,16 +24,22 @@ func (a evaluationAgent) FindMove(state game.State, updates ...searcher.Segment)
 }
 
 func findMax(policy map[game.Move]float64) game.Move {
-	if len(policy) == 0 {
-		log.Error().Msgf("policy is empty, returning nil move")
-	}
 	var maxMove game.Move
 	maxVisit := -1.0
+	var moves []game.Move
+	var visits []float64
 	for move, visit := range policy {
 		if visit > maxVisit {
 			maxVisit = visit
 			maxMove = move
 		}
+		moves = append(moves, move)
+		visits = append(visits, visit)
 	}
+
+	if maxMove == nil {
+		log.Error().Msgf("maxMove is nil, policy %+v, moves %+v, visits %+v", policy, moves, visits)
+	}
+
 	return maxMove
 }

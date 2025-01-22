@@ -8,6 +8,6 @@ type GameMove struct {
 	NumTroops    int
 }
 
-func (gm *GameMove) IsStochastic() bool {
+func (gm GameMove) IsStochastic() bool {
 	return gm.ActionType == AttackAction
 }

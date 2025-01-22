@@ -17,8 +17,8 @@ func init() {
 func main() {
 	log.Info().Msgf("number of CPUs: %d", runtime.NumCPU())
 
-	experiments.RunParallelismExperiment()
-	// experiments.RunCutoffExperiment()
-	// experiments.RunEvaluationExperiment()
+	// experiments.RunParallelismExperiment()
+	experiments.RunCutoffExperiment()
+	experiments.RunEvaluationExperiment()
 	// experiments.RunEloExperiment()
 }

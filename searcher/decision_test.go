@@ -38,10 +38,10 @@ func TestDecisionSelectOrExpand(t *testing.T) {
 		maxChild := &decision{rewards: 1, visits: 1}
 		otherChild := &decision{rewards: 0, visits: 1}
 		node := &decision{
-			moves:    []game.Move{},
-			children: map[game.Move]Node{mockMove{id: 0}: otherChild, maxMove: maxChild},
-			rewards:  1,
-			visits:   2,
+			unexplored: []game.Move{},
+			children:   map[game.Move]Node{mockMove{id: 0}: otherChild, maxMove: maxChild},
+			rewards:    1,
+			visits:     2,
 		}
 		state := mockState{}
 
@@ -64,10 +64,10 @@ func TestDecisionSelectOrExpand(t *testing.T) {
 		maxChild := &chance{rewards: 1, visits: 1}
 		otherChild := &chance{rewards: 0, visits: 1}
 		node := &decision{
-			moves:    []game.Move{},
-			children: map[game.Move]Node{mockMove{id: 0, stochastic: true}: otherChild, maxMove: maxChild},
-			rewards:  1,
-			visits:   2,
+			unexplored: []game.Move{},
+			children:   map[game.Move]Node{mockMove{id: 0, stochastic: true}: otherChild, maxMove: maxChild},
+			rewards:    1,
+			visits:     2,
 		}
 		state := mockState{}
 
@@ -90,11 +90,11 @@ func TestDecisionSelectOrExpand(t *testing.T) {
 		minChild := &decision{player: "player2", rewards: 0, visits: 1}
 		otherChild := &decision{player: "player2", rewards: 1, visits: 1}
 		node := &decision{
-			player:   "player1",
-			moves:    []game.Move{},
-			children: map[game.Move]Node{mockMove{id: 0}: otherChild, minMove: minChild},
-			rewards:  1,
-			visits:   2,
+			player:     "player1",
+			unexplored: []game.Move{},
+			children:   map[game.Move]Node{mockMove{id: 0}: otherChild, minMove: minChild},
+			rewards:    1,
+			visits:     2,
 		}
 		state := mockState{}
 
@@ -116,11 +116,11 @@ func TestDecisionSelectOrExpand(t *testing.T) {
 		minChild := &chance{player: "player2", rewards: 0, visits: 1}
 		otherChild := &chance{player: "player2", rewards: 1, visits: 1}
 		node := &decision{
-			player:   "player1",
-			moves:    []game.Move{},
-			children: map[game.Move]Node{mockMove{id: 0, stochastic: true}: otherChild, minMove: minChild},
-			rewards:  1,
-			visits:   2,
+			player:     "player1",
+			unexplored: []game.Move{},
+			children:   map[game.Move]Node{mockMove{id: 0, stochastic: true}: otherChild, minMove: minChild},
+			rewards:    1,
+			visits:     2,
 		}
 		state := mockState{}
 
@@ -140,9 +140,9 @@ func TestDecisionSelectOrExpand(t *testing.T) {
 	t.Run("expanding node with unexplored deterministic moves", func(t *testing.T) {
 		unexploredMove := mockMove{id: 1}
 		node := &decision{
-			moves:    []game.Move{unexploredMove},
-			children: map[game.Move]Node{mockMove{id: 0}: &decision{rewards: 1, visits: 1}},
-			visits:   1,
+			unexplored: []game.Move{unexploredMove},
+			children:   map[game.Move]Node{mockMove{id: 0}: &decision{rewards: 1, visits: 1}},
+			visits:     1,
 		}
 		state := mockState{moves: []game.Move{}}
 
@@ -162,9 +162,9 @@ func TestDecisionSelectOrExpand(t *testing.T) {
 	t.Run("expanding node with unexplored stochastic moves", func(t *testing.T) {
 		unexploredMove := mockMove{id: 1, stochastic: true}
 		node := &decision{
-			moves:    []game.Move{unexploredMove},
-			children: map[game.Move]Node{mockMove{id: 0, stochastic: true}: &chance{rewards: 1, visits: 1}},
-			visits:   1,
+			unexplored: []game.Move{unexploredMove},
+			children:   map[game.Move]Node{mockMove{id: 0, stochastic: true}: &chance{rewards: 1, visits: 1}},
+			visits:     1,
 		}
 		state := mockState{moves: []game.Move{}}
 
@@ -286,10 +286,10 @@ func TestDecisionRaceConditions(t *testing.T) {
 	t.Run("concurrent expansion", func(t *testing.T) {
 		// Setup a node with 2 unexplored moves
 		node := &decision{
-			moves:    []game.Move{mockMove{id: 0}, mockMove{id: 1}},
-			children: map[game.Move]Node{},
-			rewards:  0,
-			visits:   0,
+			unexplored: []game.Move{mockMove{id: 0}, mockMove{id: 1}},
+			children:   map[game.Move]Node{},
+			rewards:    0,
+			visits:     0,
 		}
 		baseState := mockState{moves: []game.Move{}}
 
