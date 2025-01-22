@@ -22,8 +22,8 @@ type MCTS struct {
 	episodes   int
 	cutoff     int
 	evaluate   game.Evaluate
-	// root       *decision
-	metrics metrics.Collector
+	root       *decision
+	metrics    metrics.Collector
 }
 
 func WithDuration(duration time.Duration) Option {
@@ -104,6 +104,7 @@ func (m *MCTS) Simulate(state game.State, lineage []Segment) (map[game.Move]floa
 		log.Error().Msgf("policy is empty, children %+v", root.children)
 	}
 
+	m.root = root
 	return policy, metric
 }
 
