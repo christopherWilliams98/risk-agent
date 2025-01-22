@@ -83,8 +83,8 @@ func NewMCTS(goroutines int, options ...Option) *MCTS {
 }
 
 func (m *MCTS) Simulate(state game.State, lineage []Segment) (map[game.Move]float64, metrics.SearchMetric) {
-	// Reuse subtree if possible
-	m.findRoot(lineage, state, m.metrics)
+	m.root = newDecision(nil, state)
+	m.metrics.SetTreeReset(true)
 
 	// Run simulations to collect statistics
 	m.metrics.Start(m.goroutines, m.cutoff, m.evaluate)
@@ -146,15 +146,15 @@ func (m *MCTS) countdown(state game.State) {
 	close(done)
 }
 
-func (m *MCTS) findRoot(path []Segment, state game.State, metrics metrics.Collector) {
+func (m *MCTS) findRoot(path []Segment, state game.State) {
 	root := traverse(m.root, path)
 	if root == nil {
 		m.root = newDecision(nil, state)
-		metrics.SetTreeReset(true)
+		m.metrics.SetTreeReset(true)
 	} else {
 		root.parent = nil
 		m.root = root
-		metrics.SetTreeReset(false)
+		m.metrics.SetTreeReset(false)
 	}
 }
 

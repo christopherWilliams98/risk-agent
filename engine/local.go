@@ -46,9 +46,7 @@ func (e *localEngine) Run() (string, metrics.GameMetric, []metrics.MoveMetric) {
 			relevantUpdates = turnUpdates[len(turnUpdates)-1:]
 		}
 		move, searchMetric := e.agents[currPlayer-1].FindMove(state, relevantUpdates...)
-
 		move = replaceInvalidMove(state, move, numMoves)
-
 		// Collect move metrics
 		moveMetrics = append(moveMetrics, metrics.MoveMetric{
 			Step:         numMoves,
@@ -95,6 +93,7 @@ func (e *localEngine) Run() (string, metrics.GameMetric, []metrics.MoveMetric) {
 func replaceInvalidMove(state *game.GameState, move game.Move, step int) game.Move {
 	if !game.IsMoveValidForPhase(state.Phase, move) {
 		log.Error().Msgf("invalid move %+v for phase %d at step %d", move, state.Phase, step)
+
 		fallbackMoves := state.LegalMoves()
 		if len(fallbackMoves) == 0 {
 			panic("No legal moves at all!")

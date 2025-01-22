@@ -141,7 +141,7 @@ def calculate_win_rates(
         .reset_index()
     )
 
-    results.columns = ["agent2", "games", "wins"]  # TODO: rename during agg()
+    results.columns = ["agent2", "games", "wins"]
     results["win_rate"] = results["wins"] / results["games"]
 
     # Merge with agent configs to get configuration parameters

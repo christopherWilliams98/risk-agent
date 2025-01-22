@@ -648,7 +648,7 @@ func (gs GameState) Play(move Move) State {
 			}
 		} else {
 			// Invalid action for this phase
-			panic("Invalid action for ReinforcementPhase")
+			panic(fmt.Sprintf("Invalid action %+v for ReinforcementPhase", gameMove))
 		}
 	case AttackPhase:
 		if gameMove.ActionType == AttackAction {
@@ -664,7 +664,7 @@ func (gs GameState) Play(move Move) State {
 			newGs = newGs.AdvancePhase()
 		} else {
 			// Invalid action for this phase
-			panic("Invalid action for AttackPhase")
+			panic(fmt.Sprintf("Invalid action %+v for AttackPhase", gameMove))
 		}
 	case ManeuverPhase:
 		if gameMove.ActionType == ManeuverAction {
@@ -681,7 +681,7 @@ func (gs GameState) Play(move Move) State {
 			newGs = newGs.AdvancePhase()
 		} else {
 			// Invalid action for this phase
-			panic("Invalid action for ManeuverPhase")
+			panic(fmt.Sprintf("Invalid action %+v for ManeuverPhase", gameMove))
 		}
 	default:
 		panic("Unknown game phase")

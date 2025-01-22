@@ -13,7 +13,6 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// TODO: rewrite implementation in eval.go
 type engine struct {
 	State  *game.GameState
 	Agents []MCTSAdapter
@@ -35,7 +34,6 @@ func LegacyEngine(players []string, agents []MCTSAdapter, m *game.Map, r game.Ru
 
 	state := game.NewGameState(m, r)
 
-	// TODO: move this logic to State
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	firstPlayer := rng.Intn(len(players)) + 1
 	state.CurrentPlayer = firstPlayer
@@ -54,7 +52,6 @@ func (e *engine) Run() (string, metrics.GameMetric, []metrics.MoveMetric) {
 		updates[i] = []Update{}
 	}
 
-	// TODO: find the random starting player and its agent accordingly
 	startingPlayer := e.State.CurrentPlayer
 	log.Info().Msgf("player %d is starting", startingPlayer)
 
@@ -114,7 +111,6 @@ func (e *engine) Run() (string, metrics.GameMetric, []metrics.MoveMetric) {
 	return e.State.Winner(), gameMetric, moveMetrics
 }
 
-// TODO: remove code smell
 type MCTSAdapter struct {
 	InternalAgent agent.Agent
 }

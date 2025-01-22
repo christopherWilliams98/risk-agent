@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	TimeBudget        = 10 * time.Millisecond
-	NumBenchmarkGames = 200 // Per matchup
+	TimeBudget        = 8 * time.Millisecond
+	NumBenchmarkGames = 100 // Per matchup
 	NumRatingGames    = 100 // Per matchup
 )
 
@@ -22,16 +22,15 @@ func RunParallelismExperiment() {
 	// Pairs the baseline agent against each experiment agent
 	baseline := metrics.AgentConfig{ID: 0, Goroutines: 1, Duration: TimeBudget}
 	expConfigs := []metrics.AgentConfig{
-		{ID: 1, Goroutines: baseline.Goroutines, Duration: baseline.Duration},
-		{ID: 2, Goroutines: 4, Duration: baseline.Duration},
-		{ID: 3, Goroutines: 8, Duration: baseline.Duration},
+		// {ID: 1, Goroutines: baseline.Goroutines, Duration: baseline.Duration},
+		// {ID: 2, Goroutines: 4, Duration: baseline.Duration},
+		// {ID: 3, Goroutines: 8, Duration: baseline.Duration},
 		{ID: 4, Goroutines: 16, Duration: baseline.Duration},
 		{ID: 5, Goroutines: 32, Duration: baseline.Duration},
 		{ID: 6, Goroutines: 64, Duration: baseline.Duration},
 	}
 	var matchUps [][]metrics.AgentConfig
 	for _, config := range expConfigs {
-		// TODO: alternate starting agent
 		matchUps = append(matchUps, []metrics.AgentConfig{baseline, config})
 	}
 
@@ -145,7 +144,6 @@ func runExperiment(name string, configs []metrics.AgentConfig, matchUps [][]metr
 
 	log.Info().Msgf("completed %s experiment", name)
 
-	// TODO: extract into function
 	// Store experiment metadata
 	writer, err := metrics.NewWriter(name)
 	if err != nil {
