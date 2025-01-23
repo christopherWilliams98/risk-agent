@@ -14,8 +14,8 @@ import (
 
 const (
 	TimeBudget        = 8 * time.Millisecond
-	NumBenchmarkGames = 20  // Per matchup
-	NumRatingGames    = 300 // Per matchup
+	NumBenchmarkGames = 1000 // Per matchup
+	NumRatingGames    = 300  // Per matchup
 )
 
 func RunParallelismExperiment() {
