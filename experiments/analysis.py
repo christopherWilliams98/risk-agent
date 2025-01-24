@@ -51,9 +51,9 @@ def plot_episodes_by_step(move_records, agent_configs, output_dir):
         # Plot episodes vs step
         sns.scatterplot(data=moves, x="step", y="episodes", alpha=0.5, ax=axes[i])
 
-        axes[i].set_title(f"Goroutines: {goroutines}")
-        axes[i].set_xlabel("Move Step")
-        axes[i].set_ylabel("Search Episodes")
+        axes[i].set_title(f"{goroutines} Goroutine(s)")
+        axes[i].set_xlabel("Move")
+        axes[i].set_ylabel("Search Episodes Per Time Budget")
 
     # Hide empty subplots if any
     for j in range(i + 1, len(axes)):
@@ -117,9 +117,9 @@ def plot_episodes_violin(move_records, agent_configs, output_dir):
     # Create violin plot
     sns.violinplot(data=move_records, x="goroutines", y="episodes", inner="box", cut=0)
 
-    plt.title("Distribution of Search Episodes by Concurrency Level")
-    plt.xlabel("Number of Goroutines")
-    plt.ylabel("Search Episodes")
+    # plt.title("Distribution of Search Episodes by Concurrency Level")
+    plt.xlabel("Goroutines")
+    plt.ylabel("Search Episodes Per Time Budget")
 
     plt.savefig(Path(output_dir) / "episodes_violin.png")
     return plt
@@ -134,6 +134,28 @@ def plot_episodes_by_cutoff(move_records, agent_configs, output_dir):
     plt.title("Distribution of Search Episodes by Cutoff Depth")
     plt.xlabel("Cutoff Depth")
     plt.ylabel("Search Episodes")
+
+    plt.savefig(Path(output_dir) / "episodes_violin_cutoff.png")
+    return plt
+
+
+def plot_episodes_by_cutoff_violin(move_records, agent_configs, output_dir):
+    """Create a violin plot of episode distributions for each cutoff depth."""
+    plt.figure(figsize=(12, 6))
+
+    # Create violin plot
+    sns.violinplot(data=move_records, x="cutoff", y="episodes")
+
+    # plt.title("Distribution of Search Episodes by Cutoff Depth")
+    plt.xlabel("Cutoff Depth")
+    plt.ylabel("Search Episodes Per Time Budget")
+    # plt.yscale('log')  # Set y-axis to logarithmic scale
+
+    # Update the last x-axis label to "Full Playout"
+    ax = plt.gca()
+    xticks = ax.get_xticklabels()
+    xticks[-1].set_text('Full Playout')
+    ax.set_xticklabels(xticks)
 
     plt.savefig(Path(output_dir) / "episodes_violin_cutoff.png")
     return plt
@@ -228,12 +250,13 @@ def plot_win_rates(
     )
 
     # Set title and labels
-    plt.title(title or f"Win Rate vs {param_col.title()}")
+    # plt.title(title or f"Win Rate vs {param_col.title()}")
     plt.xlabel(xlabel or param_col.title())
     plt.ylabel("Win Rate Against Baseline Agent")
 
     # Set x-axis ticks and labels
-    x_labels = win_rates[param_col]
+    x_labels = win_rates[param_col].copy()
+    # x_labels.iloc[-1] = "Full Playout"
     plt.xticks(x_positions, x_labels)
 
     # Add 50% line to show baseline performance
@@ -272,12 +295,13 @@ def plot_combined_win_rates(
         )
 
     # Set title and labels
-    plt.title(title or "Win Rates Comparison")
+    # plt.title(title or "Win Rates Comparison")
     plt.xlabel(xlabel or param_col.title())
     plt.ylabel("Win Rate Against Baseline Agent")
 
     # Set x-axis ticks and labels using first dataset
-    x_labels = win_rates_list[0][0][param_col]
+    x_labels = win_rates_list[0][0][param_col].copy()
+    x_labels.iloc[-1] = "Full Playout"
     plt.xticks(np.arange(len(x_labels)), x_labels)
 
     # Add 50% line to show baseline performance
@@ -360,30 +384,44 @@ def plot_elo_progression(ratings_df: pd.DataFrame, agent_configs: pd.DataFrame, 
         output_dir: Directory to save the plot
     """
     # Set up the figure
-    plt.figure(figsize=(10, 6))
+    plt.figure(figsize=(12, 6))  # Wider figure to accommodate legend
     
     # Plot line for each agent
     for agent in agent_configs['id']:
-        plt.plot(
+        line = plt.plot(
             range(len(ratings_df)), 
             ratings_df[agent],
             label=f"Agent {agent}",
             linewidth=2
+        )[0]
+        
+        # Add final rating annotation
+        final_rating = ratings_df[agent].iloc[-1]
+        plt.annotate(
+            f'{final_rating:.0f}',
+            xy=(len(ratings_df)-1, final_rating),
+            xytext=(10, 0),
+            textcoords='offset points',
+            color=line.get_color()
         )
     
     # Set title and labels
-    plt.title("Elo Rating Progression")
+    # plt.title("Elo Rating Progression")
     plt.xlabel("Games Played")
     plt.ylabel("Elo Rating")
     
     # Add baseline rating line
     plt.axhline(y=1500, color='r', linestyle='--', alpha=0.5, label='Initial Rating')
     
-    plt.grid(True)
-    plt.legend()
+    # Add vertical line at last game
+    plt.axvline(x=len(ratings_df)-1, color='gray', linestyle='--', alpha=0.5)
     
-    # Save plot
-    plt.savefig(Path(output_dir) / 'elo_progression.png')
+    plt.grid(True)
+    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    
+    # Save plot with tight layout to prevent legend cutoff
+    plt.tight_layout()
+    plt.savefig(Path(output_dir) / 'elo_progression.png', bbox_inches='tight')
     return plt
 
 

@@ -1,9 +1,32 @@
 # Abstract
+This thesis investigates the adaptation and optimization of Monte Carlo Tree Search (MCTS) for playing Risk, a complex board game characterized by large state spaces, stochastic actions, and long play sequences. We examine three key aspects of MCTS optimization: parallel tree search for increased simulation throughput, early playout termination for search efficiency, and position evaluation functions for outcome estimation.
+
+Our implementation employs tree parallelization with local mutexes and virtual losses, enabling concurrent tree growth while minimizing synchronization overhead. Through systematic experiments, we demonstrate that parallelization significantly improves playing strength, with win rates against a sequential agent increasing from 58.2% to 71.5% as concurrency scales from 4 to 64 goroutines. We further show that early playout termination at 25 moves combined with simple resource evaluation achieves a 75.2% win rate against full-playout agents, indicating that faster playouts can enhance performance when paired with reliable position assessment. Our comparison of evaluation functions highlights that the quality of outcome estimation is crucial for effective early termination.
+
+These findings provide practical insights for implementing MCTS in complex games, demonstrating that optimal performance comes from combining parallel search with early cutoff, but only when supported by robust position evaluation.
 
 # Introduction 
 ## Background 
+Monte Carlo Tree Search (MCTS) has emerged as a powerful decision-making algorithm, with particular success in domains such as board games. Unlike traditional game-playing approaches that rely heavily on domain expertise, MCTS operates through repeated random sampling and simulation to evaluate moves. This sampling-based approach allows MCTS to handle large state spaces effectively, making it especially suitable for complex games where traditional search methods become computationally intractable.
+
+Risk is a military strategic board game that presents several unique challenges for game-playing agents. It features an expansive state space due to the numerous possible troop configurations across territories, and a large action space from the various combinations of reinforcement placement, attack sequences, and troop movements. The game's stochastic elements, primarily through dice-based combat resolution, add another layer of complexity. Furthermore, Risk games typically involve long sequences of moves before reaching a conclusion, making it difficult to accurately gauge intermediate positions.
+
+While MCTS offers a promising approach for handling Risk's complexity, the game's vast state and action space as well as stochastic nature present an interesting set of challenges. The search algorithm's effectiveness depends heavily on the number of simulations it can perform within time constraints. Each simulation must navigate through potentially hundreds of moves, and many simulations are needed to build reliable statistics for move selection. This computational intensity has led to various optimization techniques being developed, including parallel execution to increase simulation throughput, early termination of playouts with position evaluation to reduce simulation time, and incorporation of domain-specific heuristics to evaluate intermediate states. The effectiveness of these enhancements, particularly in the context of Risk's unique characteristics, remains an interesting area for investigation.
+
 ## Problem Statement 
+<!-- - does parallelization improve throughput and even at high concurrency level?
+- does higher throughput translate to greater playing strength?
+- can we achieve higher throughput by shortening playouts and replacing playout result with an estimate and still achieve greater playing strength?
+- can playing strength be improved by incorporating more sophisticated position evaluation at cutoff? -->
+This thesis investigates several key questions regarding the optimization of MCTS for playing Risk. First, we examine whether parallelization can effectively improve simulation throughput at varying concurrency levels and whether increased throughput translates directly to greater playing strength. Second, we explore whether faster simulation through early cutoff can enhance agent performance, considering the trade-off between simulation depth and quantity. Finally, we investigate whether playing strength can be further improved by incorporating game-specific heuristics into intermediate position evaluation during simulation.
+
+These questions address fundamental challenges in applying MCTS to complex games like Risk. The answers will provide practical insights into scaling MCTS simulation, managing the depth-versus-quantity trade-off in simulation, and designing effective evaluation functions. Understanding these aspects is crucial for developing strong game-playing agents for Risk and similar strategic games with large state spaces, stochastic elements, and long play sequences.
+
 ## Proposed Solution
+We present a modular implementation of MCTS for Risk that enables systematic investigation of these optimization questions. The implementation separates the core search algorithm from the game logic through a well-defined interface, allowing flexible configuration of different MCTS variants. For parallelization, we implement tree parallelization with local mutexes and virtual losses, enabling concurrent tree growth while limiting synchronization overhead. To study playout efficiency, we implement configurable early termination with two evaluation functions: a simple resource-counting approach and a more sophisticated border strength heuristic that considers territorial control patterns.
+
+To evaluate these optimizations, we conduct a series of controlled experiments comparing different agent configurations. First, we measure simulation throughput and win rates across various concurrency levels to understand the impact of parallelizing the MCTS search process. Next, we examine the impact of different cutoff depths on throughput and playing strength, analyzing the trade-off between playout time and depth. Additionally, we compare the effectiveness of our evaluation functions. Finally, we perform Elo rating analysis from round-robin tournaments to evaluate the playing strength improvements from each optimization technique.
+
 
 # Prior Work 
 <!-- DONE: transition: 1) motivation, purpose, scope of work 2) MCTS, parallelization, stochasticity, action pruning, other risk agents -->
@@ -265,14 +288,158 @@ The virtual loss mechanism reduces lock contention on local mutexes by distribut
 
 
 # Results
-<!-- TODO: complete -->
-## Playout Cutoff
-<!-- the cutoff depth is a limit set to prevent simulations from running indefinitely, especially in games with large state spaces or long sequences of moves. -->
-<!-- 
-The results of the playout phase are crucial for the subsequent backup phase, where the statistics gathered during the simulation are used to update the values of nodes in the search tree. The playout outcome, whether a win, loss, or draw, is propagated back up the tree to inform the selection policy in future iterations.
- -->
+<!-- TODO: add transition -->
 
- This allows the search to be scaled based on available computational resources, from single-threaded execution to many concurrent threads. The effectiveness of parallelization is influenced by several factors including the branching factor of the game, the depth of the tree, and the ratio of time spent in tree traversal versus simulation. The local mutex with virtual loss approach is particularly effective for Risk, where the large branching factor and relatively expensive simulations provide ample opportunity for threads to naturally distribute across different parts of the search space.
+## Parallel Simulation
+<!-- - experiment purpose, setup, rationale -->
+To evaluate the effectiveness of tree parallelization, an experiment was conducted to analyze the impact of different levels of concurrency on simulation throughput and agent playing strength. The experiment setup consisted of a baseline agent running sequential MCTS (1 goroutine) and 5 experiment agents running parallel MCTS with different concurrency levels (1, 4, 8, 16, 32 and 64 goroutines). The first experiment agent uses only 1 goroutine, which should have the same performance as the baseline agent and offers a benchmark for comparison against the other experiment agents. All agents used full playouts, running each episode of simulation till there is a winner, and were configured with identical parameters except for their concurrency level. 
+
+1000 games were played between the baseline agent and each experiment agent. Each game started with a randomly selected starting player and a randomized initial position, where territories and troops were randomly but equally distributed between players. During gameplay, agents were given a fixed time budget of 8 milliseconds per move to run MCTS simulations and determine their next move. At each move, the implementation collected metrics on the number of simulation episodes completed within this time budget. Game outcomes were recorded to calculate win rates between each agent pair. Table 1 summarizes the experiment setup. All experiments were run on an M2 MacBook Air with an 8-core CPU (4 performance cores and 4 efficiency cores).
+
+<!-- TODO: add latex table -->
+<!-- TODO: add title: Parallelization experiment setup -->
+| Agent | # Goroutines | Time Budget | Cutoff Depth |
+| ----------- | ----------- | ----------- | ----------- |
+| Baseline     | 1  | 8ms | Full playout |
+| Experiment 1 | 1  | 8ms | Full playout |
+| Experiment 2 | 4  | 8ms | Full playout |
+| Experiment 3 | 8  | 8ms | Full playout |
+| Experiment 4 | 16 | 8ms | Full playout |
+| Experiment 5 | 32 | 8ms | Full playout |
+| Experiment 6 | 64 | 8ms | Full playout |
+
+<!-- - results, analysis, findings -->
+Figure 10 shows the number of simulation episodes completed within the time budget (8ms) at each move across 1000 games by each experiment agent. A notable trend across all concurrency levels is the gradual increase in episodes as games progress. This can be attributed to shorter playouts, as fewer moves remain to reach a terminal state at later stages of the game. Moreover, this throughput increase becomes more pronounced with higher concurrency, indicating the benefits of parallelization in improving simulation throughput.
+
+<!-- TODO: add latex figure & title -->
+![Figure 10: Simulation throughput at each move by concurrency level](./resources/throughput_by_move.png)
+
+The violin plot in Figure 11 reveals clearer pattern in how parallelization affects simulation throughput. Noticeably, the sequential agent (1 goroutine) shows a wide violin with a low median, indicating that the majority of searches complete relatively few simulations within the time budget. As concurrency increases, we observe two distinct trends. First, there is a consistent upward shift in the median episode count and the quartile ranges also shift upward proportionally. This suggests that the implementation successfully manages lock contention and synchronization overhead even at high concurrency levels. Second, the violin plots become progressively thinner at higher concurrency levels. This narrowing indicates that parallel agents achieve consistently higher throughput, with fewer searches of very low episode counts that characterize the sequential agent's performance. This demonstrates that parallelization effectively increases throughput across all searches.
+
+<!-- TODO: add latex figure & title -->
+![Figure 11: Distribution of simulation throughput vs concurrency level](./resources/throughput_by_concurrency.png)
+
+The win rate analysis in Figure 12 demonstrates a clear positive relationship between parallelization and playing strength. The sequential agent (1 goroutine) achieves a 51.8% win rate against the baseline, which aligns with the theoretical expectation of 50% for identical agents, with the small deviation likely due to noise inherent in stochastic games and the finite number of games played. 
+
+<!-- TODO: add latex figure & title -->
+![Figure 12: Win rate vs concurrency level](./resources/win_rate_by_concurrency.png)
+
+As concurrency increases, we observe a consistent improvement in playing strength. The 4-goroutine agent achieves a win rate of approximately 58.2%, while the 8-goroutine agent further improves to about 64.7%. This steady increase suggests that the ability to explore more game trajectories through parallelization directly translates to better decision-making. However, between 8 and 16 goroutines, the win rate improvement is minimal (approximately 0.1%). This plateau effect likely occurs because the test machine has 8 CPU cores, meaning that configurations beyond 8 goroutines goes from parallel to concurrent execution and must compete for CPU time. Nevertheless, further boosting concurrency to 32 and 64 goroutines still yields modest improvements, reaching win rates of 69.3% and 71.5% respectively.
+
+## Playout Cutoff
+<!-- - experiment purpose, setup, rationale
+  - 25: look 2 turns ahead (empirically each turn usually around 10 moves)
+  - 150, 200, 250: quartiles of 8-goroutine games length distribution  -->
+To evaluate the impact of playout cutoff depth on agent playing strength, a similar experiment was conducted comparing agents with different playout cutoff configurations against a baseline agent using full playouts. The experiment setup consisted of a baseline agent running MCTS with full playouts and 5 experiment agents running MCTS with different cutoff depths (25, 150, 200, 250 moves and full playout) and the resource evaluation function. The last experiment agent shares the exact same configuration as the baseline agent and serves as a benchmark for comparison. All agents used 8 goroutines for parallel tree search with 8ms time budget to run simulations for each move. All other parameters were identically configured.
+
+The cutoff depths were chosen based on the game length distribution from the previous experiment with 8-goroutine agents using full playouts. Empirically, agents tend to make around 10 moves per turn. An early cutoff of 25 moves evaluates very short playouts, roughly corresponding to 2 turns ahead. The cutoff depths of 150, 200, and 250 moves were chosen to align with the lower quartile, median, and upper quartile of the observed game length distribution.
+
+Similar to the previous experiment, 1000 games were played between the baseline agent and each experiment agent. Each game started with a randomly selected player and randomized board positions. Throughput metrics were collected at each move, and game outcomes were recorded after each game. Table 2 summarizes the experiment setup.
+
+| Agent | Goroutines | Time Budget | Cutoff Depth | Evaluation Function |
+|-------|------------|-------------|--------------|-------------------|
+| Baseline | 8 | 8ms | Full playout | N/A |
+| Experiment 1 | 8 | 8ms | 25 | Resources |
+| Experiment 2 | 8 | 8ms | 150 | Resources |
+| Experiment 3 | 8 | 8ms | 200 | Resources |
+| Experiment 4 | 8 | 8ms | 250 | Resources |
+| Experiment 5 | 8 | 8ms | Full playout | N/A |
+
+<!-- - results, findings, analysis 
+  - low cutoff depth > faster playouts > higher simulation throughput > greater playing strength
+  - limiting otherwise long playouts with short cutoffs could help improve playing strength 
+  - especially helpful for long games (long sequence of moves during playout) like Risk -->
+Figure 13 shows the win rate of each experiment agent against the baseline agent and demonstrates a clear inverse relationship between playout cutoff depth and agent playing strength. The agent with a 25-move cutoff achieved the highest win rate of approximately 75.2% against the baseline agent using full playouts. When increasing the cutoff depth to 150 moves, the win rate dropped sharply to 54.0%. As cutoff depth increased, win rates steadily declined, with the 200-move cutoff agent winning 52.2% of games and the 250-move cutoff agent winning 50.6%. The no-cutoff agent using full playouts performed similarly to the baseline, converging to the expected 50% win rate.
+
+<!-- TODO: add latex figure & title -->
+![Figure 13: Win rate vs playout cutoff depth](./resources/win_rate_by_cutoff.png)
+
+To understand how lower cutoff depth contributed to higher win rates, we examined the simulation throughput of each experiment agent. Figure 14 shows the distribution of simulation throughput and reveals two distinct patterns across different cutoff depths. First, there is a marked difference in throughput levels between the 25-move cutoff and all other configurations. The 25-move cutoff achieves notably higher throughput metrics, with median and quartile values significantly exceeding those of longer cutoffs. Beyond the 150-move cutoff, agents show consistently low throughput levels, with median values remaining relatively flat across the 200-move cutoff, 250-move cutoff, and full playouts. Second, beyond the 25-move cutoff, longer cutoffs exhibit increasingly bottom-heavy distributions. This widening at lower throughput values indicates that as cutoff depth increases, a growing majority of searches complete fewer episodes within the fixed time budget, suggesting decreased search efficiency.
+
+<!-- TODO: add latex figure & title -->
+![Figure 14: Simulation throughput distribution by cutoff depth](./resources/throughput_by_cutoff.png)
+
+These observations support a clear relationship between cutoff depth and agent performance. Shorter cutoffs enable faster playouts, allowing the agent to complete more simulations within the time constraint. This higher throughput translates directly to more extensive exploration of the game tree, contributing to the superior win rates observed with the 25-move cutoff agent. As cutoff depth increases to the lower, median, and upper quartiles of the game length, significantly more playouts complete before reaching the cutoff, yielding diminishing gains in time saved and increasingly similar performance to full playouts.
+
+This finding might have particular relevance for long games like Risk that involve extended sequences of moves. In such games, limiting otherwise long playouts with short cutoffs could significantly improve agent performance by enabling more efficient use of the computational budget. Rather than expending resources on lengthy random playouts that may introduce noise, the agent can conduct more numerous simulations with shorter playouts using evaluations that capture the essential strategic elements of the game state.
+
+## Evaluation Function 
+<!-- - experiment setup
+  - purpose: evaluation function's impact on playing strength
+  - setup: 1000 games between baseline and experiment agents (same as cutoff experiment, but uses border strength evaluation function) -->
+To assess the impact of evaluation functions on agent playing strength when conducting playouts with cutoff, we conducted another experiment comparing agents using the border strength evaluation function against a baseline agent using full playouts. The experiment maintained the same configuration as the previous experiment, with all agents using 8 goroutines for parallel tree search within an 8ms time budget per move. The key difference was the use of the border strength evaluation function instead of the resource evaluation function at cutoff.
+
+The border strength function incorporates additional strategic heuristics beyond simple resource counting. It evaluates positions by accumulating troop differences at border territories and weighs these differences based on the number of neighboring enemy territories. This approach attempts to capture both defensive strength and offensive potential in its position assessment and normalizes the position assessments for both players into an outcome estimate for the current player.
+
+1000 games were played between the baseline agent and each experiment agent. As in the previous experiment, games began with randomly selected starting players and randomized initial positions. The experiment used the same set of cutoff depths (25, 150, 200, 250 moves) to allow direct comparison with previous agents using the resource evaluation function.
+
+| Agent | Goroutines | Time Budget | Cutoff Depth | Evaluation Function |
+|-------|------------|-------------|--------------|-------------------|
+| Baseline | 8 | 8ms | Full playout | N/A |
+| Experiment 1 | 8 | 8ms | 25 | Border Strength |
+| Experiment 2 | 8 | 8ms | 150 | Border Strength |
+| Experiment 3 | 8 | 8ms | 200 | Border Strength |
+| Experiment 4 | 8 | 8ms | 250 | Border Strength |
+| Experiment 5 | 8 | 8ms | Full playout | N/A |
+
+<!-- - present results in win rate plot
+  - significantly worse performance than resource evaluation at same cutoff
+  - performance below baseline 50% -->
+Figure 15 compares the win rates of agents using different evaluation functions across various cutoff depths. The results reveal that agents using the border strength evaluation function performed consistently worse than both agents using resource evaluation and the baseline agent. This performance deficit persisted across all cutoff depths, though the gap narrowed slightly with longer playouts.
+
+<!-- TODO: add latex figure & title -->
+![Figure 15: Win rate vs playout cutoff depth using different evaluation functions](./resources/win_rate_by_eval_fn.png)
+
+<!-- - analyze cause to decreased win rate
+  - poor evaluation quality offers inaccurate outcome estimate, leading to bad tree statistics and poor move decision and poor agent performance
+    - incorporated heuristics might not be suitable for adapted game rules and board based on swiss map
+  - as cutoff depth increases, more searches complete fully playouts before cutoff, so performance start to approach baseline 50%
+- present takeaways
+  - evaluation function quality is important (must estimate outcome well) -->
+  
+The stark performance difference between the two evaluation functions indicates that the border strength heuristic provides significantly less reliable outcome estimate than straightforward resource counting. Misleading outcome estimates corrupts the MCTS tree statistics and ultimately results in suboptimal decisions and poor agent performance. The border strength heuristic's focus on troop differences at territory boundaries may be particularly ill-suited for the adapted game rules and the Swiss map configuration, where the modified territory connectivity and regional divisions create different strategic dynamics than traditional Risk.
+
+As cutoff depth increases, more simulations complete with full playouts before hitting the cutoff point, reducing reliance on evaluating border strength for outcome estimation. This explains why performance gradually approaches the baseline 50% win rate as cutoff depth increases toward full playout.
+
+These findings underscore a critical principle in MCTS design: the quality of the evaluation function directly impacts agent performance. When using playout cutoffs, the evaluation function must provide reliable estimates of game outcomes to effectively guide the search process. Even sophisticated heuristics that appear to capture important strategic concepts can be counterproductive if they fail to accurately predict winning positions. In this case, the simpler resource-based evaluation proved more effective by focusing on a fundamental aspect of Risk strategy - material advantage.
+
+
+## Elo Rating 
+<!-- - experiment setup
+  - purpose: higher win rate may not necessarily mean greater playing strength 
+  - explain how Elo rating works, and why better measurement of playing strength
+  - setup: agent1 (sequential), agent2 (8 goroutines), agent3 (8 goroutines, cutoff 25, resource evaluation), agent4 (8 goroutines, cutoff 25, border strength evaluation), 300 games between each pair, update Elo rating after each game, sample game in random order -->
+While win rates against a baseline agent offer useful comparisons of agent performance, they may not fully reflect changes in playing strength. To obtain a more comprehensive understanding of the impact of parallelization, cutoff, and evaluation function on playing strength, we conducted an Elo rating analysis. The Elo system provides a comparative rating framework where an agent's rating changes based on game outcomes and rating differences between opponents, offering a more direct assessment of relative playing strength. Elo ratings were initialized at 1500 for all agents and updated with each game outcome using the standard Elo formula:
+
+R' = R + K(S - E)
+
+where R' is the new rating, R is the current rating, K is the update factor (decaying from 32 to 16 as more games are played), S is the game outcome (1 for win, 0 for loss), and E is the expected outcome based on rating difference.
+
+The experiment included four agents with different configurations, summarized in Table 4. Agent 1 ran sequential MCTS with 1 goroutine and full playout. Agent 2 ran parallel MCTS with 8 goroutines and full playout. Agent 3 ran parallel MCTS with 8 goroutines, 25-move cutoff, and resource evaluation. Agent 4 ran parallel MCTS with 8 goroutines, 25-move cutoff, and border strength evaluation. Each agent had an 8ms time budget to run simulations for each move. Each agent played 300 games against every other agent, resulting in 1800 total games. Game outcomes were sampled in random order to update Elo ratings after all games were played.
+
+<!-- TODO: add latex table & title -->
+<!-- Agent configuration of Elo rating experiment -->
+| Agent | Goroutines | Time Budget | Cutoff Depth | Evaluation Function |
+|-------|------------|-------------|--------------|-------------------|
+| Agent 1 | 1 | 8ms | Full playout | N/A |
+| Agent 2 | 8 | 8ms | Full playout | N/A |
+| Agent 3 | 8 | 8ms | 25 | Resources |
+| Agent 4 | 8 | 8ms | 25 | Border Strength |
+
+<!-- - present results
+  - didn't converge as expected, but relative ranking still stands
+  - final ranking: agent3 > agent2 > agent4 > agent1 -->
+Figure 16 shows the Elo rating progression for all four agents over 1800 games. While the ratings exhibit some volatility rather than clear convergence, a relatively consistent ranking among the agents emerges towards the end. Agent 3 (8 goroutines, 25-move cutoff, and resource evaluation) retained the highest rating at 1629. Agent 2 (8 goroutines, full playout) achieved the second-highest final rating of 1526, followed by Agent 4 (8 goroutines, 25-move cutoff, and border strength evaluation) at 1480. Agent 1 (1 goroutine, full playout) performed the worst, finishing at 1363.
+
+<!-- TODO: add latex figure & title -->
+![Figure 16: Elo rating progression for four agents over 1800 games](./resources/elo_rating.png)
+
+<!-- - present takeaways
+  - confirm earlier experiment findings:
+    - higher throughput from parallelization improves playing strength
+    - even higher throughput from quicker playouts improve playing strength further
+    - poor evaluation function quality is worse than full playout (benefit from time saved outweighed by inaccurate outcome estimate) -->
+The relative standings in final ratings corroborated our earlier findings that parallelization and early cutoff with reliable evaluation can both enhance playing strength. The higher rating of Agent 2 (1526) compared to Agent 1 (1363) indicates that parallelizing the MCTS search process improved the agent's playing strength. The even higher rating of Agent 3 (1629) compared to Agent 2 (1526) suggests that adding early cutoff with a reliable evaluation function provides further playing strength boost than parallelization alone. Meanwhile, Agent 4's lower rating (1480) compared to Agent 2 (1526) demonstrates that inaccurate outcome estimates from poor evaluation can outweigh the benefits of achieving more simulations through faster playouts.
 
 # Other Findings
 The implementation and analysis of the MCTS agent revealed several opportunities for enhancement. Experimental results demonstrated that shorter rollouts with heuristic evaluation could achieve higher simulation throughput and better playing strength compared to full playouts. However, the quality of these evaluations significantly impacts performance, and developing effective heuristics requires extensive domain knowledge specific to the game rules and board configuration.
@@ -469,7 +636,7 @@ Computational resource management would be crucial for practical implementation.
 Training stability would require particular attention due to the multi-headed network architecture and the complex interaction between policy and value learning objectives. The implementation should incorporate gradient normalization and adaptive learning rate scheduling to manage the different convergence rates of the policy heads and value predictions. Rolling checkpoint validation could be essential to detect and address training instabilities early.
 
 
-### Future Work
+# Future Work
 <!-- - Hyperparameter optimization
 - Architecture improvements
 - Training efficiency enhancements
@@ -479,3 +646,10 @@ Several promising directions for future improvement could enhance the proposed l
 The training process could benefit from systematic hyperparameter optimization through techniques such as population-based training or Bayesian optimization. This could help identify optimal values for critical parameters such as the learning rates and loss weighting coefficients.
 
 Performance optimizations could focus on more efficient neural network architectures, such as quantization-aware training or architecture search to find better trade-offs between model capacity and inference speed. The MCTS implementation could also be extended to support distributed computation, enabling larger-scale training and evaluation across multiple machines.
+
+# Conclusion
+This thesis implemented and investigated several approaches to optimizing MCTS for playing Risk, focusing on parallelization, playout efficiency, and position evaluation. Our experiments demonstrated that tree parallelization effectively improves simulation throughput, even at high concurrency levels. This performance gain validates the effectiveness of our parallelization approach using local mutexes and virtual losses, showing that MCTS can successfully leverage parallel and concurrent computation to improve decision-making, despite the overhead of synchronization.
+
+The investigation of playout efficiency revealed that early cutoff with reliable evaluation can significantly enhance playing strength. Agents using a 25-move cutoff with resource evaluation substantially outperformed the baseline agent using full playout, achieving a 75.2% win rate against it. However, our evaluation function comparison highlighted a crucial caveat: the quality of position evaluation is critical for this approach to succeed and unreliable evaluation can negate the benefits of increased simulation throughput.
+
+These findings provide practical guidelines for implementing MCTS in complex games like Risk. They suggest that optimal performance comes from combining parallel tree search with early cutoff, but only when supported by robust position evaluation. Future work could explore the application of deep learning and reinforcement learning techniques to develop more accurate evaluation functions and a more targeted tree search policy, potentially through self-play.
